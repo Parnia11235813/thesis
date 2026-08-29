@@ -1,0 +1,36 @@
+FROZEN EMPIRICAL CONSTANTS
+D0_ms=1.014581
+D_hat_no_RL=0.995008
+D_hat_RL=0.588071
+
+DoS-weight sensitivity
+  dRID:AD: 153
+  dRID:A0: 78
+
+CIA sensitivity
+  dRI:A0: 70
+  dRID:A0: 39
+  d0:AI: 32
+  dD:AD: 29
+  d0:AD: 19
+  dD:A0: 12
+  d0:A0: 10
+  dD:AI: 8
+  d0:AI|dRID:A0: 6
+  d0:AI|dRI:A0: 5
+  dRID:AD: 1
+
+Adaptive repeated analysis
+  dRID:AD: 20
+  dRID:A0: 11
+
+Security-floor feasibility changes
+  floor=0.0: feasible=d0|dR|dI|dD|dRI|dRD|dID|dRID, eq=dRID:AD
+  floor=0.05: feasible=dRI|dRID, eq=dRID:AD
+  floor=0.6: feasible=dRID, eq=dRID:AD
+  floor=0.85: feasible=NONE, eq=INFEASIBLE
+
+Budget equilibrium transitions
+  budget=0.0: eq=d0:AI, value=-1.0
+  budget=0.2: eq=dRI:AD, value=-0.6337693219838615
+  budget=0.3: eq=dRID:AD, value=-0.4960236838543782

@@ -1,0 +1,1836 @@
+<title>امنیت MQTT با مدل Stackelberg</title>
+<meta name="description" content="ارائه‌ی پروژه: شبیه‌سازی حمله/دفاع MQTT روی ns-3، مدل شدت آسیب، و حل بازی امنیتی Stackelberg" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap');
+
+  :root{
+    --bg:#f2f4f2;
+    --surface:#ffffff;
+    --surface-2:#e9edec;
+    --line:rgba(20,30,28,0.12);
+    --line-strong:rgba(20,30,28,0.22);
+    --ink:#12201c;
+    --ink-dim:#4d5c57;
+    --ink-faint:#7c8b85;
+    --teal:#0f7d6f;
+    --teal-ink:#0a5c52;
+    --amber:#b9611c;
+    --amber-ink:#8f4a12;
+    --red:#a5311f;
+    --code-blue:#1861ac;
+    --code-violet:#8a3fa8;
+    --shadow: 0 1px 2px rgba(20,30,28,0.06), 0 8px 24px rgba(20,30,28,0.06);
+    --radius: 14px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0c1210;
+      --surface:#121c19;
+      --surface-2:#182420;
+      --line:rgba(230,240,235,0.10);
+      --line-strong:rgba(230,240,235,0.18);
+      --ink:#e9f2ee;
+      --ink-dim:#a9bdb5;
+      --ink-faint:#748881;
+      --teal:#5fd9c4;
+      --teal-ink:#8be8d7;
+      --amber:#f0a154;
+      --amber-ink:#f3b878;
+      --red:#e5786a;
+      --code-blue:#6fb3f2;
+      --code-violet:#cf9bf0;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0c1210;
+    --surface:#121c19;
+    --surface-2:#182420;
+    --line:rgba(230,240,235,0.10);
+    --line-strong:rgba(230,240,235,0.18);
+    --ink:#e9f2ee;
+    --ink-dim:#a9bdb5;
+    --ink-faint:#748881;
+    --teal:#5fd9c4;
+    --teal-ink:#8be8d7;
+    --amber:#f0a154;
+    --amber-ink:#f3b878;
+    --red:#e5786a;
+    --code-blue:#6fb3f2;
+    --code-violet:#cf9bf0;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.35);
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+    direction:rtl;
+    line-height:1.85;
+    -webkit-font-smoothing:antialiased;
+  }
+  .ltr{ direction:ltr; unicode-bidi:isolate; font-family:'Vazirmatn', 'Segoe UI', Tahoma, sans-serif; }
+  .mono{ font-family:'Vazirmatn', 'Segoe UI', Tahoma, sans-serif; }
+
+  h1,h2,h3,h4{ font-weight:700; margin:0; }
+  p{ margin:0; }
+  a{ color:inherit; }
+
+  .wrap{ max-width:1040px; margin:0 auto; padding:0 28px; }
+  @media (max-width:640px){ .wrap{ padding:0 18px; } }
+
+  /* ---------- top progress rail ---------- */
+  #rail{
+    position:fixed; top:0; right:0; left:0; height:3px; z-index:50;
+    background:transparent;
+  }
+  #rail-fill{
+    height:100%; width:0%;
+    background:linear-gradient(90deg,var(--teal),var(--amber));
+    transition:width .08s linear;
+  }
+
+  nav.chaptermarks{
+    position:fixed; top:50%; left:22px; transform:translateY(-50%);
+    z-index:40; display:flex; flex-direction:column; gap:14px;
+  }
+  @media (max-width:900px){ nav.chaptermarks{ display:none; } }
+  nav.chaptermarks a{
+    width:9px; height:9px; border-radius:50%;
+    background:var(--ink-faint); opacity:.45;
+    display:block; position:relative;
+    transition:opacity .2s, background .2s, transform .2s;
+  }
+  nav.chaptermarks a.active{ background:var(--teal); opacity:1; transform:scale(1.35); }
+  nav.chaptermarks a span{
+    position:absolute; right:18px; top:50%; transform:translateY(-50%);
+    white-space:nowrap; font-size:12px; color:var(--ink-dim);
+    background:var(--surface); border:1px solid var(--line); border-radius:8px;
+    padding:4px 9px; opacity:0; pointer-events:none; transition:opacity .15s;
+    box-shadow:var(--shadow);
+  }
+  nav.chaptermarks a:hover span{ opacity:1; }
+
+  /* ---------- hero ---------- */
+  header.hero{
+    position:relative; overflow:hidden;
+    padding:96px 0 76px;
+    border-bottom:1px solid var(--line);
+  }
+  #netcanvas{ position:absolute; inset:0; width:100%; height:100%; opacity:.55; }
+  header.hero .wrap{ position:relative; z-index:2; }
+
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:'Vazirmatn',sans-serif; font-size:12.5px; letter-spacing:.06em;
+    color:var(--teal-ink); background:color-mix(in srgb, var(--teal) 12%, transparent);
+    border:1px solid color-mix(in srgb, var(--teal) 35%, transparent);
+    padding:6px 12px; border-radius:100px; margin-bottom:22px;
+  }
+  .eyebrow::before{ content:''; width:6px; height:6px; border-radius:50%; background:var(--teal); }
+
+  h1.title{
+    font-size:clamp(24px,4.2vw,58px); line-height:1.22; letter-spacing:-.01em;
+  }
+  h1.title em{ font-style:normal; color:var(--teal-ink); }
+
+  .hero-sub{
+    margin-top:22px; max-width:56ch; font-size:18px; color:var(--ink-dim);
+  }
+
+  .hero-meta{
+    margin-top:40px; display:flex; flex-wrap:wrap; gap:10px;
+  }
+  .chip{
+    font-family:'Vazirmatn',sans-serif; font-size:12.5px; color:var(--ink-dim);
+    border:1px solid var(--line-strong); border-radius:8px; padding:7px 12px;
+    background:var(--surface);
+  }
+  .chip b{ color:var(--ink); font-weight:600; }
+
+  /* readout box */
+  .readout{
+    margin-top:44px;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); overflow:hidden; max-width:640px;
+  }
+  .readout .bar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 16px; border-bottom:1px solid var(--line); background:var(--surface-2);
+  }
+  .readout .bar span{ font-family:'Vazirmatn',sans-serif; font-size:11.5px; color:var(--ink-faint); }
+  .readout .dots{ display:flex; gap:6px; }
+  .readout .dots i{ width:9px; height:9px; border-radius:50%; background:var(--line-strong); display:block; }
+  .readout pre{
+    margin:0; padding:16px 18px; font-family:'Vazirmatn',sans-serif; font-size:12.5px;
+    line-height:1.85; direction:ltr; text-align:left; overflow-x:auto; color:var(--ink-dim);
+  }
+  .readout pre .k{ color:var(--teal-ink); }
+  .readout pre .v{ color:var(--ink); }
+  .readout pre .t{ color:var(--amber-ink); }
+
+  /* ---------- sections ---------- */
+  section{ padding:88px 0; border-bottom:1px solid var(--line); }
+  section:last-of-type{ border-bottom:none; }
+
+  .kicker{
+    font-family:'Vazirmatn',sans-serif; font-size:12.5px; letter-spacing:.08em;
+    color:var(--ink-faint); text-transform:uppercase; margin-bottom:14px; display:block;
+  }
+  h2.h{
+    font-size:clamp(17px,2.3vw,34px); margin-bottom:18px;
+  }
+  .lede{ font-size:17px; color:var(--ink-dim); max-width:66ch; margin-bottom:44px; }
+
+  /* three-layer stack */
+  .layers{ display:grid; gap:16px; }
+  .layer{
+    display:grid; grid-template-columns:auto 1fr; gap:22px;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:26px 28px; box-shadow:var(--shadow); position:relative;
+  }
+  .layer .num{
+    font-family:'Vazirmatn',sans-serif; font-weight:700; font-size:14px;
+    width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+    background:var(--surface-2); color:var(--teal-ink); border:1px solid var(--line-strong); flex:none;
+  }
+  .layer h3{ font-size:19px; margin-bottom:8px; }
+  .layer p{ color:var(--ink-dim); font-size:15px; max-width:62ch; }
+  .layer .tag{
+    font-family:'Vazirmatn',sans-serif; font-size:11px; color:var(--ink-faint);
+    margin-top:10px; display:block;
+  }
+  .layer-connector{
+    width:1px; height:16px; background:var(--line-strong); margin-inline-start:20px;
+  }
+
+  /* topology diagram */
+  .topo{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:34px 28px; margin-bottom:44px;
+  }
+  .topo-scroll{ overflow-x:auto; }
+  .topo svg{ width:100%; min-width:640px; height:auto; display:block; }
+  .topo-caption{ margin-top:18px; font-size:13.5px; color:var(--ink-faint); text-align:center; }
+
+  /* module grid */
+  .modgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
+  .mod{
+    background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 18px;
+    box-shadow:var(--shadow);
+  }
+  .mod .idx{ font-family:'Vazirmatn',sans-serif; font-size:11px; color:var(--ink-faint); }
+  .mod h4{ font-size:15px; margin:6px 0 8px; }
+  .mod p{ font-size:13.5px; color:var(--ink-dim); }
+
+  /* attack / defense split */
+  .split{ display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  @media (max-width:760px){ .split{ grid-template-columns:1fr; } }
+  .col-head{
+    display:flex; align-items:center; gap:10px; margin-bottom:16px;
+  }
+  .col-head .dot{ width:10px; height:10px; border-radius:50%; }
+  .col-head.attack .dot{ background:var(--amber); }
+  .col-head.defense .dot{ background:var(--teal); }
+  .col-head h3{ font-size:16px; font-family:'Vazirmatn',sans-serif; letter-spacing:.02em; }
+
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:18px 20px; margin-bottom:12px; box-shadow:var(--shadow);
+  }
+  .card.attack{ border-inline-start:3px solid var(--amber); }
+  .card.defense{ border-inline-start:3px solid var(--teal); }
+  .card h4{ font-size:15px; margin-bottom:6px; }
+  .card p{ font-size:13.5px; color:var(--ink-dim); }
+
+  .pipeline{
+    display:flex; align-items:center; gap:0; flex-wrap:wrap; margin-top:30px;
+    background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:20px;
+    box-shadow:var(--shadow);
+  }
+  .pipeline .step{
+    font-family:'Vazirmatn',sans-serif; font-size:12.5px; padding:8px 14px;
+    border-radius:8px; background:var(--surface-2); border:1px solid var(--line-strong);
+    color:var(--ink);
+  }
+  .pipeline .arrow{ color:var(--ink-faint); padding:0 8px; font-size:13px; }
+
+  /* timeline */
+  .timeline{ position:relative; margin:8px 0 8px; }
+  .timeline .track{
+    display:flex; height:46px; border-radius:10px; overflow:hidden; border:1px solid var(--line-strong);
+  }
+  .timeline .seg{ display:flex; align-items:center; justify-content:center; font-family:'Vazirmatn',sans-serif; font-size:12px; color:var(--ink); position:relative; }
+  .timeline .seg.init{ background:var(--surface-2); flex:1; color:var(--ink-faint); }
+  .timeline .seg.traffic{ background:color-mix(in srgb, var(--teal) 18%, var(--surface)); flex:10; }
+  .timeline .seg.attack{ background:color-mix(in srgb, var(--amber) 30%, var(--surface)); flex:4; }
+  .timeline .seg.drain{ background:var(--surface-2); flex:9; color:var(--ink-faint); }
+  .timeline .labels{ display:flex; justify-content:space-between; font-family:'Vazirmatn',sans-serif; font-size:11px; color:var(--ink-faint); margin-top:8px; }
+
+  .matrix-stat{
+    display:flex; align-items:baseline; gap:14px; margin-top:28px; flex-wrap:wrap;
+  }
+  .matrix-stat .eq{ font-family:'Vazirmatn',sans-serif; font-size:15px; color:var(--ink-dim); }
+  .matrix-stat .big{ font-family:'Vazirmatn',sans-serif; font-weight:700; font-size:30px; color:var(--teal-ink); }
+
+  /* code excerpts */
+  .codecard{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); overflow:hidden; margin-bottom:22px;
+  }
+  .codecard .chead{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    padding:14px 20px; background:var(--surface-2); border-bottom:1px solid var(--line);
+  }
+  .codecard .chead{ gap:12px; }
+  .codecard .midx{
+    font-weight:700; font-size:12px; color:var(--teal-ink);
+    background:var(--surface); border:1px solid var(--line-strong); border-radius:8px;
+    width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; flex:none;
+  }
+  .codecard .chead h4{ font-size:15px; display:flex; align-items:center; gap:10px; }
+  .codecard .chead span{ font-size:12px; color:var(--ink-faint); direction:ltr; unicode-bidi:isolate; }
+  .codecard pre{
+    margin:0; padding:18px 20px; overflow-x:auto; direction:ltr; text-align:left;
+    font-size:13px; line-height:1.75; color:var(--ink-dim); background:var(--surface-2);
+  }
+  .codecard pre code{ white-space:pre; font-family:'Vazirmatn',sans-serif; }
+  .codecard pre code .hljs-keyword,
+  .codecard pre code .hljs-built_in{ color:var(--code-violet); font-weight:600; }
+  .codecard pre code .hljs-string{ color:var(--teal-ink); }
+  .codecard pre code .hljs-comment{ color:var(--ink-faint); font-style:italic; }
+  .codecard pre code .hljs-number{ color:var(--amber-ink); }
+  .codecard pre code .hljs-title.function_,
+  .codecard pre code .hljs-title{ color:var(--code-blue); font-weight:600; }
+  .codecard pre code .hljs-type,
+  .codecard pre code .hljs-class .hljs-title{ color:var(--code-blue); }
+  .codecard pre code .hljs-literal{ color:var(--code-violet); }
+  .codecard pre code .hljs-params{ color:var(--ink); }
+  .codecard pre code .hljs-variable,
+  .codecard pre code .hljs-property{ color:var(--red); }
+  .codecard pre code .hljs-meta{ color:var(--ink-faint); }
+  .codecard pre code .hljs-operator,
+  .codecard pre code .hljs-punctuation{ color:var(--ink-dim); }
+  .codecard .cexplain{
+    padding:16px 20px 20px; border-top:1px dashed var(--line); font-size:14px; color:var(--ink-dim); line-height:1.9;
+  }
+  .codecard .cexplain b{ color:var(--ink); }
+
+  /* stat grid */
+  .statgrid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-top:28px; }
+  .stat{
+    background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:20px;
+    box-shadow:var(--shadow);
+  }
+  .stat .label{ font-size:12.5px; color:var(--ink-faint); margin-bottom:8px; }
+  .stat .value{ font-family:'Vazirmatn',sans-serif; font-size:24px; font-weight:700; color:var(--ink); }
+  .stat .value.teal{ color:var(--teal-ink); }
+  .stat .value.amber{ color:var(--amber-ink); }
+  .stat .sub{ font-size:12px; color:var(--ink-faint); margin-top:6px; }
+
+  /* impact formula card */
+  .formula{
+    background:var(--surface-2); border:1px solid var(--line-strong); border-radius:12px;
+    padding:20px 24px; font-family:'Vazirmatn',sans-serif; font-size:14px; color:var(--ink);
+    direction:ltr; text-align:left; overflow-x:auto; margin:24px 0;
+  }
+  .formula .comment{ color:var(--ink-faint); }
+
+  /* equilibrium box */
+  .eqbox{
+    background:linear-gradient(180deg, color-mix(in srgb, var(--teal) 8%, var(--surface)), var(--surface));
+    border:1px solid var(--line-strong); border-radius:var(--radius); padding:30px 30px;
+    box-shadow:var(--shadow); margin-top:30px;
+  }
+  .eqbox .row{ display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .eqbox .badge{
+    font-family:'Vazirmatn',sans-serif; font-weight:700; font-size:20px;
+    background:var(--surface); border:1px solid var(--line-strong); border-radius:10px;
+    padding:12px 18px; color:var(--teal-ink);
+  }
+  .eqbox p{ margin-top:14px; color:var(--ink-dim); font-size:14.5px; max-width:60ch; }
+
+  /* sensitivity bars */
+  .sens{ display:grid; gap:14px; margin-top:28px; }
+  .sens .row{ display:grid; grid-template-columns:180px 1fr 70px; align-items:center; gap:14px; }
+  @media (max-width:600px){ .sens .row{ grid-template-columns:110px 1fr 56px; } }
+  .sens .name{ font-size:13.5px; color:var(--ink-dim); }
+  .sens .barbg{ height:10px; border-radius:6px; background:var(--surface-2); border:1px solid var(--line); overflow:hidden; }
+  .sens .barfg{ height:100%; border-radius:6px; background:linear-gradient(90deg,var(--teal),var(--amber)); }
+  .sens .pct{ font-family:'Vazirmatn',sans-serif; font-size:13px; color:var(--ink); text-align:left; direction:ltr; }
+
+  /* limitations list */
+  .limlist{ display:grid; gap:10px; margin-top:8px; }
+  .lim{
+    display:grid; grid-template-columns:22px 1fr; gap:12px; align-items:start;
+    padding:14px 16px; background:var(--surface); border:1px solid var(--line); border-radius:10px;
+  }
+  .lim .mark{ color:var(--red); font-family:'Vazirmatn',sans-serif; font-weight:700; }
+  .lim p{ font-size:14px; color:var(--ink-dim); }
+
+  /* chapter status */
+  .chapters{ display:grid; gap:10px; margin-top:28px; }
+  .chrow{
+    display:grid; grid-template-columns:50px 1fr auto; align-items:center; gap:16px;
+    padding:14px 16px; border:1px solid var(--line); border-radius:10px; background:var(--surface);
+  }
+  .chrow .cn{ font-family:'Vazirmatn',sans-serif; color:var(--ink-faint); font-size:13px; }
+  .chrow .ct{ font-size:14.5px; }
+  .status{
+    font-family:'Vazirmatn',sans-serif; font-size:11.5px; padding:5px 10px; border-radius:100px;
+    white-space:nowrap;
+  }
+  .status.done{ background:color-mix(in srgb, var(--teal) 16%, transparent); color:var(--teal-ink); border:1px solid color-mix(in srgb, var(--teal) 40%, transparent); }
+  .status.pending{ background:color-mix(in srgb, var(--red) 14%, transparent); color:var(--red); border:1px solid color-mix(in srgb, var(--red) 35%, transparent); }
+
+  footer{ padding:56px 0 80px; }
+  footer .wrap{ display:flex; justify-content:space-between; flex-wrap:wrap; gap:14px; color:var(--ink-faint); font-size:13px; }
+
+  ::selection{ background:color-mix(in srgb, var(--teal) 35%, transparent); }
+
+  /* ---------- titlecard (personal info) ---------- */
+  .titlecard{
+    max-width:640px; margin:34px auto 0; background:var(--surface);
+    border:1px dashed var(--line-strong); border-radius:var(--radius);
+    padding:18px 22px; box-shadow:var(--shadow); position:relative;
+  }
+  .titlecard .tc-flag{
+    position:absolute; top:-11px; right:18px; background:var(--amber); color:#fff;
+    font-size:10.5px; font-weight:700; padding:3px 10px; border-radius:100px;
+  }
+  .titlecard dl{ display:grid; grid-template-columns:auto 1fr; gap:9px 14px; margin:6px 0 0; font-size:13px; }
+  .titlecard dt{ color:var(--ink-faint); white-space:nowrap; }
+  .titlecard dd{ margin:0; color:var(--ink-dim); border-bottom:1px dashed var(--line); padding-bottom:3px; }
+  .titlecard dd[contenteditable]{ outline:none; cursor:text; }
+  .titlecard dd[contenteditable]:hover{ color:var(--teal-ink); }
+  .titlecard dd[contenteditable]:focus{ color:var(--ink); border-bottom-color:var(--teal); }
+
+  /* ---------- interactive attack demo ---------- */
+  .demo-panel{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:28px 26px 24px; margin-top:32px;
+  }
+  .scenario-tabs{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:24px; }
+  .scenario-tabs button{
+    font-family:'Vazirmatn',sans-serif; font-size:13.5px; font-weight:600; padding:10px 18px; border-radius:100px;
+    border:1px solid var(--line-strong); background:var(--surface-2); color:var(--ink-dim); cursor:pointer;
+    transition:all .18s ease; display:flex; align-items:center; gap:8px;
+  }
+  .scenario-tabs button .dot{ width:8px; height:8px; border-radius:50%; background:var(--ink-faint); }
+  .scenario-tabs button.active{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .scenario-tabs button.active .dot{ background:var(--bg); }
+  .scenario-tabs button.legit.active{ background:var(--teal); border-color:var(--teal); color:#04211c; }
+  .scenario-tabs button.attack.active{ background:var(--red); border-color:var(--red); color:#fff; }
+
+  .net-map{
+    display:flex; align-items:center; justify-content:center; gap:6px; margin:0 0 22px;
+    padding:16px 10px; background:var(--surface-2); border:1px dashed var(--line); border-radius:12px; flex-wrap:wrap;
+  }
+  .net-node{ display:flex; flex-direction:column; align-items:center; gap:6px; min-width:84px; padding:8px 6px; border-radius:12px; transition:all .25s ease; }
+  .net-icon{
+    width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:16px; background:var(--surface); border:2px solid var(--line-strong); color:var(--ink-faint); transition:all .25s ease;
+  }
+  .net-lbl{ font-size:11px; color:var(--ink-faint); font-weight:600; }
+  .net-node.on .net-icon{ border-color:var(--teal); color:var(--teal-ink); background:color-mix(in srgb, var(--teal) 14%, var(--surface)); box-shadow:0 0 0 5px color-mix(in srgb, var(--teal) 16%, transparent); }
+  .net-node.on .net-lbl{ color:var(--teal-ink); }
+  .net-node.attacking .net-icon{ border-color:var(--red); color:var(--red); background:color-mix(in srgb, var(--red) 14%, var(--surface)); box-shadow:0 0 0 5px color-mix(in srgb, var(--red) 18%, transparent); animation:netpulse 1s ease-in-out infinite; }
+  .net-node.attacking .net-lbl{ color:var(--red); }
+  .net-node.received .net-icon{ border-color:var(--teal); color:var(--teal-ink); background:color-mix(in srgb, var(--teal) 18%, var(--surface)); }
+  .net-node.received .net-lbl{ color:var(--teal-ink); }
+  .net-wire{ width:26px; height:2px; background:var(--line-strong); flex-shrink:0; }
+  @keyframes netpulse{ 0%,100%{ box-shadow:0 0 0 5px color-mix(in srgb, var(--red) 18%, transparent); } 50%{ box-shadow:0 0 0 9px color-mix(in srgb, var(--red) 10%, transparent); } }
+
+  .sim-controls{
+    display:none; align-items:center; gap:12px; margin:-4px 0 18px; padding:12px 16px;
+    background:color-mix(in srgb, var(--amber) 12%, var(--surface)); border-radius:12px; flex-wrap:wrap;
+  }
+  .sim-controls.show{ display:flex; }
+  .sim-controls label{ font-size:12.5px; color:var(--ink-dim); font-weight:600; white-space:nowrap; }
+  .sim-controls input[type="range"]{ flex:1; min-width:140px; accent-color:var(--amber); }
+  .sim-controls .sim-val{ font-family:'Vazirmatn',sans-serif; direction:ltr; font-size:12.5px; font-weight:700; color:var(--amber-ink); min-width:76px; text-align:left; }
+
+  .puback-strip{
+    display:flex; align-items:center; gap:10px; margin:-2px 0 18px; padding:10px 16px;
+    background:var(--surface-2); border:1px dashed var(--line); border-radius:12px; font-size:12px; color:var(--ink-faint);
+  }
+  .puback-strip .light{ width:9px; height:9px; border-radius:50%; background:var(--line-strong); transition:all .3s ease; flex-shrink:0; }
+  .puback-strip .light.on{ background:var(--teal); box-shadow:0 0 0 4px color-mix(in srgb, var(--teal) 25%, transparent); }
+
+  .rail-wrap{ position:relative; padding:10px 4px 0; overflow-x:auto; }
+  .rail{ position:relative; display:flex; align-items:center; justify-content:space-between; min-width:760px; height:150px; margin:10px 0 30px; }
+  .rail-line{ position:absolute; top:50%; right:40px; left:40px; height:3px; background:var(--line); transform:translateY(-50%); border-radius:2px; z-index:0; }
+  .rail-line .fill{ position:absolute; top:0; right:0; height:100%; width:0%; background:var(--teal); border-radius:2px; transition:width .55s cubic-bezier(.4,0,.2,1); }
+  .rail-line.blocked .fill{ background:var(--red); }
+  .rail-line.mixed .fill{ background:var(--amber); }
+  .node-stop{ position:relative; z-index:1; width:108px; display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .node-stop .box{
+    width:74px; height:74px; border-radius:18px; background:var(--surface-2); border:2px solid var(--line-strong);
+    display:flex; align-items:center; justify-content:center; font-size:22px; color:var(--ink-faint);
+    transition:all .35s ease; position:relative;
+  }
+  .node-stop .box.active{ border-color:var(--amber); background:color-mix(in srgb, var(--amber) 14%, var(--surface)); color:var(--amber-ink); transform:scale(1.08); }
+  .node-stop .box.pass{ border-color:var(--teal); background:color-mix(in srgb, var(--teal) 14%, var(--surface)); color:var(--teal-ink); }
+  .node-stop .box.fail{ border-color:var(--red); background:color-mix(in srgb, var(--red) 12%, var(--surface)); color:var(--red); animation:shake .4s ease; }
+  .node-stop .box.mixed{ border-color:var(--amber); background:color-mix(in srgb, var(--amber) 14%, var(--surface)); color:var(--amber-ink); }
+  .node-stop .lbl{ font-size:11.5px; font-weight:700; text-align:center; color:var(--ink-dim); }
+  .node-stop .sub{ font-size:9.5px; color:var(--ink-faint); text-align:center; direction:ltr; font-family:'Vazirmatn',sans-serif; }
+  @keyframes shake{ 0%,100%{transform:translateX(0);} 25%{transform:translateX(-5px);} 75%{transform:translateX(5px);} }
+
+  .packet{
+    position:absolute; top:50%; right:40px; width:26px; height:26px; margin-top:-13px; border-radius:8px;
+    background:var(--teal); box-shadow:0 3px 10px rgba(0,0,0,.2); display:flex; align-items:center; justify-content:center;
+    font-size:12px; color:#fff; z-index:2; transition:right .55s cubic-bezier(.4,0,.2,1), background .3s ease, opacity .3s ease, transform .3s ease;
+  }
+  .packet.hide{ opacity:0; transform:scale(.5); }
+  .packet.danger{ background:var(--red); }
+  .packet.good{ background:var(--teal); }
+
+  .flood-stats{ display:flex; gap:18px; flex-wrap:wrap; margin:-8px 0 16px; font-size:12.5px; color:var(--ink-dim); }
+  .flood-stats b{ font-size:13.5px; color:var(--ink); font-family:'Vazirmatn',sans-serif; }
+  .flood-stats .ok b{ color:var(--teal-ink); }
+  .flood-stats .bad b{ color:var(--red); }
+
+  .outcome-banner{
+    margin-top:6px; padding:16px 20px; border-radius:14px; font-size:13.5px; line-height:1.9;
+    background:var(--surface-2); border:1px solid var(--line); color:var(--ink-dim);
+    display:flex; align-items:flex-start; gap:12px; min-height:26px; transition:all .3s ease;
+  }
+  .outcome-banner b{ color:var(--ink); }
+  .outcome-banner.good{ background:color-mix(in srgb, var(--teal) 12%, var(--surface)); border-color:var(--teal); color:var(--teal-ink); }
+  .outcome-banner.good b{ color:var(--teal-ink); }
+  .outcome-banner.bad{ background:color-mix(in srgb, var(--red) 10%, var(--surface)); border-color:var(--red); color:var(--red); }
+  .outcome-banner.bad b{ color:var(--red); }
+
+  .replay-btn{
+    font-family:'Vazirmatn',sans-serif; font-size:12.5px; font-weight:600; padding:8px 16px; border-radius:100px;
+    border:1px solid var(--line-strong); background:var(--surface); color:var(--ink-dim); cursor:pointer; margin-top:14px;
+  }
+  .replay-btn:hover{ background:color-mix(in srgb, var(--teal) 12%, var(--surface)); color:var(--teal-ink); }
+
+  .session-stats{
+    display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+    margin-top:16px; padding:14px 18px; border-top:1px dashed var(--line);
+  }
+  .session-stats .ss-nums{ display:flex; gap:20px; flex-wrap:wrap; }
+  .session-stats .ss-item{ font-size:12px; color:var(--ink-dim); }
+  .session-stats .ss-item b{ font-size:15px; color:var(--ink); font-family:'Vazirmatn',sans-serif; direction:ltr; display:inline-block; }
+  .session-stats .ss-item.ss-ok b{ color:var(--teal-ink); }
+  .session-stats .ss-item.ss-bad b{ color:var(--red); }
+  .session-stats .ss-reset{
+    font-family:'Vazirmatn',sans-serif; font-size:11.5px; color:var(--ink-faint); background:none; border:1px solid var(--line-strong);
+    border-radius:100px; padding:5px 12px; cursor:pointer;
+  }
+  .session-stats .ss-reset:hover{ color:var(--ink-dim); border-color:var(--ink-dim); }
+
+  /* ---------- thank-you closing ---------- */
+  .thanks{
+    text-align:center; padding:110px 22px 100px; position:relative;
+  }
+  .thanks .big{
+    font-size:clamp(22px,4vw,52px); font-weight:800; color:var(--ink);
+  }
+  .thanks .sub{ margin-top:16px; font-size:15px; color:var(--ink-dim); }
+  .thanks .rule{
+    width:64px; height:3px; margin:26px auto 0; border-radius:2px;
+    background:linear-gradient(90deg,var(--teal),var(--amber));
+  }
+</style>
+
+<div class="titlecard">
+  <dl>
+    <dt>عنوان پایان‌نامه:</dt><dd contenteditable="true">مدل امنیت تطبیقی برای ارتباطات MQTT در شبکه‌های صنعتی اینترنت اشیا؛ مدل‌سازی پروتکل و مقایسه‌ی رویکردهای بهینه‌سازی مبتنی‌بر نظریه‌بازی‌ها با شبیه‌سازی ns-3</dd>
+    <dt>نام دانشجو:</dt><dd contenteditable="true">پرنیان نخعی</dd>
+    <dt>شماره دانشجویی:</dt><dd contenteditable="true">0640880185</dd>
+    <dt>استاد راهنما:</dt><dd contenteditable="true">سرکار خانم دکتر سید فرجی</dd>
+    <dt>دانشگاه / دانشکده:</dt><dd contenteditable="true">دانشگاه الزهرا / دانشکده فنی و مهندسی</dd>
+    <dt>رشته / گرایش:</dt><dd contenteditable="true">مهندسی برق / الکترونیک</dd>
+    <dt>تاریخ ارائه:</dt><dd contenteditable="true">۱۴۰۵/۰۶/۰۷</dd>
+  </dl>
+</div>
+
+<div id="rail"><div id="rail-fill"></div></div>
+
+<nav class="chaptermarks" id="chaptermarks"></nav>
+
+<header class="hero">
+  <canvas id="netcanvas"></canvas>
+  <div class="wrap">
+    <span class="eyebrow">پروژه‌ی پایان‌نامه‌ی کارشناسی &nbsp;·&nbsp; امنیت شبکه</span>
+    <h1 class="title">امنیت MQTT در IIoT با مدل بازی <em>Stackelberg</em></h1>
+    <p class="hero-sub">
+      یک شبیه‌سازی وفادار به استاندارد MQTT 3.1.1 روی ns-3، یک مدل شدت آسیب مبتنی‌بر داده‌ی تجربی،
+      و یک حل تحلیلی بازی امنیتی Stackelberg، برای پاسخ به این سؤال که مدافع عقلانی، در برابر
+      مهاجم عقلانی، چه ترکیب دفاعی را باید انتخاب کند.
+    </p>
+    <div class="hero-meta">
+      <span class="chip">پروتکل: <b>MQTT 3.1.1 · QoS 1</b></span>
+      <span class="chip">بستر شبیه‌سازی: <b>ns-3 · TCP/CSMA</b></span>
+      <span class="chip">حمله‌ها: <b>Replay · Injection · DoS</b></span>
+      <span class="chip">دفاع‌ها: <b>Auth/ACL · Freshness · Rate Limiting</b></span>
+      <span class="chip">ماتریس تجربی: <b>۸ × ۳ × ۱۰ = ۲۴۰ اجرا</b></span>
+    </div>
+
+  </div>
+</header>
+
+<main>
+
+  <section id="s-problem">
+    <div class="wrap">
+      <span class="kicker">۰۱ / مسئله</span>
+      <h2 class="h">چرا «فقط پیاده‌سازی حمله و دفاع» کافی نیست</h2>
+      <p class="lede">
+        در یک کارخانه‌ی صنعتی، ده‌ها سنسور کم‌توان از طریق پروتکل سبک MQTT با یک بروکر مرکزی حرف می‌زنند.
+        اگر مهاجمی داده جعل کند یا سیستم را با سیل پیام غرق کند، نتیجه از یک هشدار اشتباه تا توقف خط تولید است.
+        می‌شد گفت: «همیشه هر سه دفاع را روشن نگه دار»، اما هر دفاع هزینه دارد: پردازش، تأخیر، پیچیدگی.
+        مدافع باید تصمیم بگیرد کدام ترکیب دفاعی می‌ارزد، در حالی‌که مهاجم هم عاقلانه و با توجه به هزینه‌ی خودش
+        بهترین حمله را انتخاب می‌کند. این دقیقاً جایی‌ست که نظریه‌بازی‌ها لازم می‌شود.
+      </p>
+
+      <div class="layers">
+        <div class="layer">
+          <div class="num">۱</div>
+          <div>
+            <h3>لایه‌ی پروتکل: شبیه‌سازی وفادار به استاندارد</h3>
+            <p>پیاده‌سازی MQTT 3.1.1 روی TCP در ns-3: چهار گره (ناشر/بروکر/مشترک/مهاجم)، سه حمله، سه دفاع مستقل.
+            خروجی: اعداد خام اندازه‌گیری‌شده، نه فرض‌شده.</p>
+            <span class="tag">۸ ماژول C++ · ۲٬۴۰۰+ خط</span>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="num">۲</div>
+          <div>
+            <h3>لایه‌ی Impact: از داده‌ی خام تا شدت آسیب</h3>
+            <p>اعداد خام (نسبت تحویل، تأخیر، نرخ مسدودسازی) روی یک مقیاس واحد ۰ تا ۱ نگاشت می‌شوند و بر مثلث
+            CIA (محرمانگی/یکپارچگی/دسترس‌پذیری) تصویر می‌گردند، با ثابت‌های کالیبره‌شده از همان داده‌ی تجربی.</p>
+            <span class="tag">calibrated from 240-run dataset</span>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="num">۳</div>
+          <div>
+            <h3>لایه‌ی بازی: حل تحلیلی Stackelberg</h3>
+            <p>مدافع (رهبر) اول ترکیب دفاعی را متعهد می‌شود؛ مهاجم (پیرو) با دیدن آن بهترین پاسخ را انتخاب
+            می‌کند. تعادل بازی، همراه با هفت نوع تحلیل حساسیت روی هزینه‌ها و وزن‌ها، حل می‌شود.</p>
+            <span class="tag">Strong / Weak Stackelberg Equilibrium</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="s-topology">
+    <div class="wrap">
+      <span class="kicker">۰۲ / پیاده‌سازی</span>
+      <h2 class="h">توپولوژی و تبادل پروتکلی</h2>
+      <p class="lede">
+        چهار گره روی یک لینک CSMA مشترک با پشته‌ی کامل TCP/IP. تصمیم امنیتی بروکر همیشه بر پایه‌ی
+        هویت اتصال (IP مبدأ در لحظه‌ی Accept) گرفته می‌شود، نه محتوای payload که در دنیای واقعی قابل جعل است.
+      </p>
+
+      <div class="topo">
+        <div class="topo-scroll">
+        <svg viewBox="0 0 780 320" xmlns="http://www.w3.org/2000/svg" aria-label="topology diagram">
+          <g font-family="Vazirmatn, sans-serif">
+            <!-- links -->
+            <line x1="180" y1="72"  x2="380" y2="160" stroke="var(--line-strong)" stroke-width="1.5"/>
+            <line x1="180" y1="248" x2="380" y2="160" stroke="var(--amber)" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <line x1="480" y1="160" x2="620" y2="160" stroke="var(--teal)" stroke-width="1.5"/>
+
+            <!-- publisher -->
+            <rect x="40" y="36" width="180" height="72" rx="12" fill="var(--surface)" stroke="var(--line-strong)"/>
+            <text x="130" y="66" text-anchor="middle" fill="var(--ink)" font-size="14" font-weight="600">Publisher</text>
+            <text x="130" y="88" text-anchor="middle" fill="var(--ink-faint)" font-size="10.5">legitimate · QoS 1</text>
+
+            <!-- attacker -->
+            <rect x="40" y="212" width="180" height="72" rx="12" fill="var(--surface)" stroke="var(--amber)" stroke-width="1.5"/>
+            <text x="130" y="242" text-anchor="middle" fill="var(--amber-ink)" font-size="14" font-weight="600">Attacker</text>
+            <text x="130" y="264" text-anchor="middle" fill="var(--ink-faint)" font-size="10.5">replay / injection / dos</text>
+
+            <!-- broker -->
+            <rect x="380" y="122" width="180" height="76" rx="14" fill="var(--surface-2)" stroke="var(--line-strong)" stroke-width="1.5"/>
+            <text x="470" y="154" text-anchor="middle" fill="var(--ink)" font-size="15" font-weight="700">Broker</text>
+            <text x="470" y="176" text-anchor="middle" fill="var(--ink-faint)" font-size="10">auth/acl → freshness → rate&#8288;-&#8288;limit</text>
+
+            <!-- subscriber -->
+            <rect x="620" y="122" width="140" height="76" rx="12" fill="var(--surface)" stroke="var(--teal)" stroke-width="1.5"/>
+            <text x="690" y="154" text-anchor="middle" fill="var(--teal-ink)" font-size="14" font-weight="600">Subscriber</text>
+            <text x="690" y="176" text-anchor="middle" fill="var(--ink-faint)" font-size="9.5">factory/sensor/</text>
+            <text x="690" y="189" text-anchor="middle" fill="var(--ink-faint)" font-size="9.5">telemetry</text>
+          </g>
+        </svg>
+        </div>
+        <p class="topo-caption">PUBLISH(topic, QoS1, PacketId) → بروکر → PUBACK؛ در صورت پذیرش، forward به مشترک با PacketId تازه.</p>
+      </div>
+
+      <div class="modgrid">
+        <div class="mod"><span class="idx">۰۱</span><h4>MQTT Wire</h4><p>کدگذاری/کدگشایی بایت‌به‌بایت CONNECT/CONNACK/PUBLISH/PUBACK/SUBSCRIBE/SUBACK و بازآرایی جریان TCP.</p></div>
+        <div class="mod"><span class="idx">۰۲</span><h4>Research Payload</h4><p>۱۲ بایت متادیتای تحقیقاتی (publisherId + sequence) داخل payload اپلیکیشن، بدون انحراف از استاندارد.</p></div>
+        <div class="mod"><span class="idx">۰۳</span><h4>Scenario State</h4><p>تعریف انواع حمله، ~۳۰ شمارنده‌ی چرخه‌ی حیات پیام، rate limiter پنجره‌ی ثابت.</p></div>
+        <div class="mod"><span class="idx">۰۴</span><h4>Publisher</h4><p>سنسور صنعتی قانونی: تولید ترافیک baseline با نرخ ثابت، بدون آگاهی از حمله/دفاع.</p></div>
+        <div class="mod"><span class="idx">۰۵</span><h4>Attacker</h4><p>یک تابع واحد که بر اساس نوع حمله شاخه می‌رود؛ زیرساخت مشترک برای مقایسه‌ی برابر است.</p></div>
+        <div class="mod"><span class="idx">۰۶</span><h4>Subscriber</h4><p>نقطه‌ی پایانی تحویل و نقطه‌ی سنجش: تأخیر سرتاسری از این‌جا اندازه‌گیری می‌شود.</p></div>
+        <div class="mod"><span class="idx">۰۷</span><h4>Broker</h4><p>قلب امنیتی: طبقه‌بندی بر اساس IP، پایپ‌لاین دفاعی سه‌مرحله‌ای، forwarding.</p></div>
+        <div class="mod"><span class="idx">۰۸</span><h4>Main / Orchestration</h4><p>پارس آرگومان، اعتبارسنجی «زمان‌بندی منجمد»، ساخت توپولوژی، خروجی JSON ساختاریافته.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="s-attacks">
+    <div class="wrap">
+      <span class="kicker">۰۳ / تهدید و دفاع</span>
+      <h2 class="h">سه حمله، سه دفاع، یک پایپ‌لاین</h2>
+      <p class="lede">
+        هر دفاع مستقل روشن یا خاموش می‌شود؛ در مجموع ۸ ترکیب دفاعی ممکن (d0 تا dRID) وجود دارد. ترتیب اجرا در بروکر
+        همیشه ثابت است، مستقل از این‌که کدام دفاع‌ها فعال‌اند.
+      </p>
+
+      <div class="split">
+        <div>
+          <div class="col-head attack"><span class="dot"></span><h3>حمله‌ها (A)</h3></div>
+          <div class="card attack">
+            <h4>Replay (پخش مجدد)</h4>
+            <p>یک پیام قانونیِ قبلاً «شنیده‌شده» با Packet Identifier تازه دوباره ارسال می‌شود؛ sequence عمداً تغییر نمی‌کند چون خودِ ماهیت replay است.</p>
+          </div>
+          <div class="card attack">
+            <h4>Injection (تزریق)</h4>
+            <p>یک پیام کاملاً جدید و جعلی از یک هویت غیرمجاز (publisherId=999) مستقیماً به بروکر فرستاده می‌شود.</p>
+          </div>
+          <div class="card attack">
+            <h4>DoS (منع سرویس)</h4>
+            <p>یک دستگاه compromise‌شده با هویت معتبر، سیل پیام با نرخ بالا می‌فرستد تا ترافیک قانونی هم‌رتبه رد شود.</p>
+          </div>
+        </div>
+        <div>
+          <div class="col-head defense"><span class="dot"></span><h3>دفاع‌ها (D)</h3></div>
+          <div class="card defense">
+            <h4>Auth / ACL</h4>
+            <p>بروکر فقط به دستگاه‌های شناخته‌شده اجازه‌ی publish می‌دهد؛ تنها دفاعی که مستقل از نوع حمله عمل می‌کند.</p>
+          </div>
+          <div class="card defense">
+            <h4>Freshness / Anti-Replay</h4>
+            <p>بالاترین sequence دیده‌شده به‌ازای هر ناشر قانونی نگه‌داری می‌شود؛ پیام با sequence قدیمی‌تر یا مساوی رد می‌شود.</p>
+          </div>
+          <div class="card defense">
+            <h4>Rate Limiting</h4>
+            <p>پنجره‌ی ثابت‌یک‌ثانیه‌ای؛ حداکثر تعداد پیام مجاز از هر منبع را محدود می‌کند؛ ابزار اصلی مقابله با DoS است.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="pipeline">
+        <span class="step">دریافت PUBLISH</span><span class="arrow">→</span>
+        <span class="step">PUBACK بی‌قیدوشرط (سطح وایر)</span><span class="arrow">→</span>
+        <span class="step">Auth / ACL</span><span class="arrow">→</span>
+        <span class="step">Freshness</span><span class="arrow">→</span>
+        <span class="step">Rate Limiting</span><span class="arrow">→</span>
+        <span class="step">Forwarding به مشترک</span>
+      </div>
+
+      <div class="demo-panel" id="demo">
+        <p style="font-size:13.5px; color:var(--ink-dim); margin-bottom:20px;">
+          روی یک سناریو بزنید تا مسیر واقعیِ همان پیام، از گره‌ی مبدأ تا نتیجه‌ی نهایی، قدم‌به‌قدم نشان داده شود.
+          برای سناریوی DoS می‌توانید شدت حمله را هم با اسلایدر تغییر دهید.
+        </p>
+        <div class="scenario-tabs" id="scenario-tabs"></div>
+
+        <div class="net-map" id="net-map">
+          <div class="net-node" id="net-publisher"><div class="net-icon">📤</div><div class="net-lbl">ناشر</div></div>
+          <div class="net-wire"></div>
+          <div class="net-node" id="net-attacker"><div class="net-icon">☠</div><div class="net-lbl">مهاجم</div></div>
+          <div class="net-wire"></div>
+          <div class="net-node" id="net-broker"><div class="net-icon">🧠</div><div class="net-lbl">بروکر</div></div>
+          <div class="net-wire"></div>
+          <div class="net-node" id="net-subscriber"><div class="net-icon">📥</div><div class="net-lbl">مشترک</div></div>
+        </div>
+
+        <div class="sim-controls" id="sim-controls">
+          <label for="intensity-slider">شدت حمله (تعداد پیام‌های نمونه):</label>
+          <input type="range" id="intensity-slider" min="5" max="21" step="2" value="9">
+          <span class="sim-val" id="intensity-val">۹ پیام</span>
+        </div>
+
+        <div class="puback-strip">
+          <span class="light" id="puback-light"></span>
+          <span>مسیر پروتکلی (مستقل از تصمیم امنیتی): <b class="mono" id="puback-text" style="color:var(--ink-dim)">در انتظار...</b></span>
+        </div>
+
+        <div class="rail-wrap">
+          <div class="rail" id="rail-demo">
+            <div class="rail-line"><div class="fill" id="rail-fill-demo"></div></div>
+            <div class="packet" id="packet-demo">✉</div>
+
+            <div class="node-stop"><div class="lbl">ناشر / مهاجم</div><div class="box" id="stop-0">▶</div><div class="sub">source</div></div>
+            <div class="node-stop"><div class="lbl">۱. احراز هویت</div><div class="box" id="stop-1">🔑</div><div class="sub">Auth / ACL</div></div>
+            <div class="node-stop"><div class="lbl">۲. بررسی تازگی</div><div class="box" id="stop-2">🕐</div><div class="sub">Freshness</div></div>
+            <div class="node-stop"><div class="lbl">۳. محدودسازی نرخ</div><div class="box" id="stop-3">⏳</div><div class="sub">Rate Limit</div></div>
+            <div class="node-stop"><div class="lbl">مشترک</div><div class="box" id="stop-4">📥</div><div class="sub">destination</div></div>
+          </div>
+        </div>
+
+        <div class="flood-stats" id="flood-stats" style="display:none;">
+          <span>ارسال‌شده: <b class="mono" id="fs-sent">0</b></span>
+          <span class="ok">عبورکرده: <b class="mono" id="fs-passed">0</b></span>
+          <span class="bad">مسدودشده: <b class="mono" id="fs-blocked">0</b></span>
+        </div>
+
+        <div class="outcome-banner" id="outcome"></div>
+        <button class="replay-btn" id="replay-btn">🔁 بازپخش پویانمایی</button>
+
+        <div class="session-stats">
+          <div class="ss-nums">
+            <div class="ss-item">اجراهای این نشست: <b id="ss-runs">۰</b></div>
+            <div class="ss-item">کل پیام‌های شبیه‌سازی‌شده: <b id="ss-sent">۰</b></div>
+            <div class="ss-item ss-ok">پذیرفته‌شده: <b id="ss-accepted">۰</b></div>
+            <div class="ss-item ss-bad">مسدودشده: <b id="ss-blocked">۰</b></div>
+          </div>
+          <button class="ss-reset" id="ss-reset-btn">بازنشانی آمار نشست</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="s-code">
+    <div class="wrap">
+      <span class="kicker">۰۴ / پیاده‌سازی واقعی</span>
+      <h2 class="h">کد بر اساس ۸ ماژول شبیه‌سازی ns-3</h2>
+      <p class="lede">
+        کد نهایی پروژه به ۸ ماژول منطقی تقسیم می‌شود. برای هر ماژول، اول نقشش در معماری کلی آمده
+        و بعد یک قطعه‌ی کد واقعی که همان منطق را نشان می‌دهد.
+      </p>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۱</span>لایه‌ی وایر MQTT</h4><span>mqtt-wire.cc/h · TryExtractPacket</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          <b>پیش‌زمینه و مفهوم:</b> تنها مسئولیت این ماژول، کدگذاری و کدگشایی بایت‌به‌بایت پروتکل MQTT 3.1.1 است
+          (CONNECT/CONNACK/PUBLISH/PUBACK/SUBSCRIBE/SUBACK). هیچ منطق امنیتی یا تحقیقاتی در آن نیست. فیلد
+          «Remaining Length» در MQTT با یک عدد صحیح متغیرالطول (variable-byte integer) کدگذاری می‌شود: هر بایت
+          ۷ بیت داده و ۱ بیت «ادامه دارد» حمل می‌کند، پس طول بسته می‌تواند بین ۱ تا ۴ بایت باشد، بدون این‌که برای
+          پیام‌های کوچک فضای اضافه هدر برود.
+          <br><br>
+          <b>دلیل جداسازی این ماژول:</b> این عمدی است تا تغییر قوانین امنیتی در ماژول بروکر هرگز نیازی به
+          دست‌کاری نحوه‌ی کدگذاری بایت‌ها نداشته باشد، و برعکس.
+        </div>
+        <pre><code class="language-cpp">bool
+TryExtractPacket(std::vector&lt;uint8_t&gt;&amp; stream, PacketView&amp; out)
+{
+    if (stream.size() &lt; 2) return false;
+
+    uint32_t remainingLength = 0;
+    size_t remainingLengthBytes = 0;
+    if (!DecodeRemainingLength(stream, 1, remainingLength, remainingLengthBytes))
+        return false; // incomplete TCP stream, wait for more bytes
+
+    const size_t fullPacketBytes = 1 + remainingLengthBytes + remainingLength;
+    if (stream.size() &lt; fullPacketBytes) return false;
+
+    out.header = stream[0];
+    out.type = static_cast&lt;uint8_t&gt;((stream[0] &gt;&gt; 4) &amp; 0x0f);
+    out.body.assign(stream.begin() + (1 + remainingLengthBytes),
+                     stream.begin() + fullPacketBytes);
+
+    stream.erase(stream.begin(), stream.begin() + fullPacketBytes);
+    return true;
+}</code></pre>
+        <div class="cexplain">
+          چون TCP یک جریان بایت پیوسته است، نه پیام‌بندی‌شده، این تابع بافر دریافتی را می‌خواند و فقط وقتی یک پکت
+          کامل در آن حاضر باشد استخراجش می‌کند؛ در غیر این صورت <b>false</b> برمی‌گرداند تا منتظر بایت‌های بیشتر بماند.
+          این دقیقاً مشکل fragmentation/coalescing در TCP را حل می‌کند که خیلی از شبیه‌سازی‌های ساده آن را نادیده می‌گیرند.
+        </div>
+      </div>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۲</span>Payload تحقیقاتی</h4><span>research-payload.cc/h · CreateResearchPayload</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          MQTT فقط یک پاکت‌بندی است و به محتوای پیام کاری ندارد. این ماژول یک فرمت ۱۲بایتی (۴ بایت شناسه‌ی ناشر
+          و ۸ بایت شماره‌ترتیب) تعریف می‌کند تا هر پیام دریافتی بعداً به منبعش نسبت داده شود؛ زیرساخت لازم برای
+          محاسبه‌ی تأخیر سرتاسری و تشخیص Replay.
+        </div>
+        <pre><code class="language-cpp">std::vector&lt;uint8_t&gt;
+CreateResearchPayload(uint32_t publisherId, uint64_t sequence, uint32_t payloadBytes)
+{
+    std::vector&lt;uint8_t&gt; payload;
+    payload.reserve(12 + payloadBytes);
+
+    WriteU32(payload, publisherId);
+    WriteU64(payload, sequence);
+
+    for (uint32_t i = 0; i &lt; payloadBytes; ++i)
+        payload.push_back(static_cast&lt;uint8_t&gt;(i &amp; 0xff));
+
+    return payload;
+}</code></pre>
+        <div class="cexplain">
+          این ۱۲ بایت جزو هدر MQTT نیستند، کاملاً داخل Application Message payload قرار دارند؛ پس انحرافی از
+          استاندارد وایر محسوب نمی‌شود، دقیقاً مثل یک سنسور صنعتی واقعی که JSON یا Protobuf داخل payload خودش می‌فرستد.
+        </div>
+      </div>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۳</span>وضعیت مشترک سناریو</h4><span>scenario-state.cc/h · RateLimitAccept</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          <b>پیش‌زمینه و مفهوم:</b> این ماژول تعریف بازی را نگه می‌دارد: نوع حمله‌ی جاری، کدام دفاع‌ها فعال‌اند، و
+          همه‌ی شمارنده‌های اندازه‌گیری (حدود ۳۰ شمارنده که چرخه‌ی حیات هر پیام را دنبال می‌کنند). Rate limiter هم
+          همین‌جا پیاده شده و بر پایه‌ی الگوریتم «شمارنده‌ی پنجره‌ی ثابت» (fixed-window counter) کار می‌کند: زمان
+          پیوسته با تابع floor به بازه‌های صحیح یک‌ثانیه‌ای شکسته می‌شود (windowIndex = ⌊now⌋)؛ هر بازه یک شمارنده‌ی
+          مستقل دارد که با ورود به بازه‌ی بعدی صفر می‌شود.
+          <br><br>
+          <b>دلیل انتخاب این الگوریتم:</b> ساده‌ترین و کم‌هزینه‌ترین روش پیاده‌سازی محدودسازی نرخ است (فقط یک
+          متغیر شمارنده و یک اندیس زمانی)، اما هزینه‌اش این است که در مرز دو پنجره (مثلاً میلی‌ثانیه‌ی آخر یک ثانیه
+          و میلی‌ثانیه‌ی اول ثانیه‌ی بعد) از نظر تئوری می‌تواند نزدیک به دو برابر نرخ مجاز عبور کند؛ جایگزین دقیق‌تر
+          الگوریتم «پنجره‌ی لغزان» (sliding-window) است که این مرز را ندارد اما پیاده‌سازی پیچیده‌تری می‌طلبد.
+        </div>
+        <pre><code class="language-cpp">bool
+RateLimitAccept(bool isAttack)
+{
+    if (!isAttack || !g_rateLimitingEnabled) return true;
+    if (g_rateLimitHz &lt;= 0.0) return false;
+
+    const int64_t windowIndex =
+        static_cast&lt;int64_t&gt;(std::floor(Simulator::Now().GetSeconds()));
+
+    if (windowIndex != g_currentRateWindow)
+    {
+        g_currentRateWindow = windowIndex;
+        g_rateWindowAccepted = 0;
+    }
+
+    const uint64_t maxAcceptedPerWindow =
+        static_cast&lt;uint64_t&gt;(std::floor(g_rateLimitHz));
+
+    if (g_rateWindowAccepted &lt; maxAcceptedPerWindow)
+    {
+        ++g_rateWindowAccepted;
+        return true;
+    }
+    return false;
+}</code></pre>
+        <div class="cexplain">
+          پیاده‌سازی یک fixed-window rate limiter است، نه sliding-window: هر ثانیه (بر پایه‌ی <b>floor(now)</b>) یک
+          پنجره‌ی تازه شروع می‌شود و حداکثر floor(rateLimitHz) پیام در آن پذیرفته می‌شود؛ در مرز دو پنجره، از نظر
+          تئوری امکان یک burst لحظه‌ای بیش از نرخ مجاز وجود دارد.
+        </div>
+      </div>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۴</span>ناشر</h4><span>mqtt-publisher.cc/h · SendLegitimatePublish</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          نماینده‌ی دستگاه IoT صنعتی قانونی است: با نرخ ثابت تله‌متری می‌فرستد، کاملاً بی‌خبر از این‌که چه حمله یا
+          دفاعی فعال است. تنها استثنا: اگر سناریوی Replay فعال باشد، همین‌جا لحظه‌ی انتشار پیامِ هدف «شنود» می‌شود.
+        </div>
+        <pre><code class="language-cpp">void
+SendLegitimatePublish()
+{
+    if (Simulator::Now() &gt;= g_trafficStop) return;
+
+    const uint64_t sequence = g_nextLegitSequence++;
+    const std::vector&lt;uint8_t&gt; payload =
+        CreateResearchPayload(LEGITIMATE_PUBLISHER_ID, sequence, g_payloadBytes);
+
+    if (g_attackKind == AttackKind::REPLAY &amp;&amp;
+        !g_replayPayloadCaptured &amp;&amp; sequence == g_replaySequence)
+    {
+        g_capturedReplayPayload = payload; // attacker "overhears" this message
+        g_replayPayloadCaptured = true;
+    }
+
+    g_publisherSocket-&gt;Send(Mqtt::ToNs3Packet(Mqtt::BuildPublishQos1(
+        MQTT_TOPIC, NextPacketId(g_nextPublisherPacketId), payload)));
+
+    Simulator::Schedule(g_publishInterval, &amp;SendLegitimatePublish);
+}</code></pre>
+        <div class="cexplain">
+          تابعی خودزمان‌بند است که تا <b>g_trafficStop</b> خودش را دوباره زمان‌بندی می‌کند. نکته‌ی ظریف: capture پیام
+          برای Replay دقیقاً همین‌جا، درون مسیر ترافیک قانونی، اتفاق می‌افتد؛ نه در ماژول مهاجم.
+        </div>
+      </div>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۵</span>مهاجم</h4><span>mqtt-attacker.cc/h · SendAttackMessage</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          هر سه حمله (Replay/Injection/DoS) از یک تابع واحد شاخه می‌روند تا زیرساخت مشترک (اتصال، PacketId، ارسال)
+          داشته باشند و فقط در محتوای payload و زمان‌بندی فرق کنند؛ همین یکسان‌سازی، مقایسه‌ی apples-to-apples بین
+          سه حمله را در نتایج ممکن می‌کند.
+        </div>
+        <pre><code class="language-cpp">if (g_attackKind == AttackKind::REPLAY)
+{
+    payload = g_capturedReplayPayload; // same sequence, fresh Packet Identifier
+}
+else if (g_attackKind == AttackKind::INJECTION)
+{
+    payload = CreateResearchPayload(
+        INJECTION_PUBLISHER_ID, sequence, g_payloadBytes);
+}
+else // DoS: a compromised client using the legitimate identity
+{
+    publisherId = LEGITIMATE_PUBLISHER_ID;
+    payload = CreateResearchPayload(publisherId, sequence, g_payloadBytes);
+}</code></pre>
+        <div class="cexplain">
+          Replay و DoS از هویت «قانونی» استفاده می‌کنند (یکی پیام واقعی را تکرار می‌کند، دیگری از دستگاهی سازش‌شده
+          با هویت معتبر می‌آید)، در حالی که Injection از یک هویت جعلی (۹۹۹) استفاده می‌کند که هرگز مجاز به CONNECT نبوده.
+        </div>
+      </div>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۶</span>مشترک</h4><span>mqtt-subscriber.cc/h · HandleSubscriberRead</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          هم نقطه‌ی پایانی تحویل است و هم نقطه‌ی سنجش نهایی: فقط از این‌جا می‌شود فهمید یک پیام واقعاً سرتاسر تحویل
+          داده شده یا نه.
+        </div>
+        <pre><code class="language-cpp">auto originIt = g_brokerPendingPubacks.find(publish.packetId);
+if (originIt == g_brokerPendingPubacks.end())
+{
+    ++g_state.unexpectedPackets;
+    continue;
+}
+
+const bool originalLegitimate = originIt-&gt;second; // ground truth from the broker
+++g_state.subscriberMessagesReceived;
+
+if (originalLegitimate)
+    ++g_state.subscriberLegitimateMessagesReceived;
+else
+    ++g_state.subscriberAttackMessagesReceived;</code></pre>
+        <div class="cexplain">
+          منشأ هر پیام (قانونی یا حمله) از حقیقتِ زمینه‌ای بروکر خوانده می‌شود، نه از فیلد publisherId داخل payload
+          که در دنیای واقعی قابل جعل است؛ این یک کانال دیدِ داخلیِ شبیه‌ساز است، فقط برای سنجش دقیق متریک‌ها، نه چیزی
+          که در پروتکل واقعی روی سیم منتقل شود.
+        </div>
+      </div>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۷</span>بروکر</h4><span>mqtt-broker.cc/h · BrokerAccept</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          <b>پیش‌زمینه و مفهوم:</b> قلب امنیتی سیستم. سه دفاع (Auth/ACL، Freshness، Rate Limiting) دقیقاً این‌جا
+          به‌صورت یک پایپ‌لاین ترتیبی پیاده می‌شوند و تصمیم می‌گیرند پیام دریافتی forward شود یا نه. مبنای این طراحی
+          یک اصل شناخته‌شده در مهندسی امنیت است: تصمیم امنیتی باید روی «مرز اعتماد» قابل‌تأیید بگیرد، نه روی داده‌ای
+          که خودِ طرف مقابل تولید کرده. آدرس IP مبدأ یک اتصال TCP توسط پشته‌ی شبکه (نه توسط کلاینت) تعیین می‌شود،
+          پس جعل آن در این مدل شبیه‌سازی ممکن نیست؛ محتوای payload اما کاملاً در کنترل فرستنده است.
+          <br><br>
+          <b>دلیل این طراحی:</b> اگر بروکر تصمیم امنیتی را از فیلد publisherId داخل payload می‌گرفت، یک مهاجم
+          می‌توانست به‌سادگی همان شناسه‌ی قانونی را در پیام خودش بنویسد و از هر دفاعی عبور کند؛ چون تصمیم از روی IP
+          اتصال گرفته می‌شود، این راه دور زدن دفاع اصلاً وجود ندارد.
+        </div>
+        <pre><code class="language-cpp">void
+BrokerAccept(Ptr&lt;Socket&gt; socket, const Address&amp; from)
+{
+    g_brokerClientRole[socket] = ClientRole::UNKNOWN;
+
+    if (InetSocketAddress::IsMatchingType(from))
+    {
+        const InetSocketAddress remote =
+            InetSocketAddress::ConvertFrom(from);
+
+        if (remote.GetIpv4() == g_publisherIp)
+            g_brokerClientRole[socket] = ClientRole::PUBLISHER;
+        else if (remote.GetIpv4() == g_subscriberIp)
+            g_brokerClientRole[socket] = ClientRole::SUBSCRIBER;
+        else if (remote.GetIpv4() == g_attackerIp)
+            g_brokerClientRole[socket] = ClientRole::ATTACKER;
+    }
+}</code></pre>
+        <div class="cexplain">
+          نقش هر اتصال درست در لحظه‌ی پذیرش TCP و فقط از روی آدرس IP مبدأ تعیین می‌شود، نه از محتوای payload.
+          <b>این کلیدی‌ترین تصمیم طراحی نسخه‌ی نهایی است:</b> تصمیم امنیتی هرگز به داده‌ی لایه‌ی بالاتر برای تصمیم
+          لایه‌ی پایین‌تر اعتماد نمی‌کند.
+        </div>
+      </div>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۸</span>main / Orchestration</h4><span>main.cc · frozen-timing validation</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          <b>پیش‌زمینه و مفهوم:</b> پارامترهای خط فرمان را می‌گیرد، پیکربندی را طبق «روش‌شناسی زمان‌بندی منجمد» پیش
+          از اجرا اعتبارسنجی می‌کند، توپولوژی را می‌سازد، شبیه‌سازی را اجرا می‌کند، و در پایان متریک‌ها و پرچم‌های
+          اعتبارسنجی را به‌صورت یک JSON ساختاریافته چاپ می‌کند. این بخش از یک اصل پایه‌ی طراحی آزمایش تجربی پیروی
+          می‌کند: برای این‌که تفاوت بین سناریوهای clean/attack/defended فقط به همان متغیر مورد آزمایش (نوع حمله،
+          دفاع فعال) نسبت داده شود، باید همه‌ی متغیرهای دیگر (زمان‌بندی، نرخ ترافیک قانونی، طول شبیه‌سازی) بین
+          اجراها کاملاً ثابت بمانند؛ در غیر این صورت هر تفاوتی در نتیجه ممکن است ناشی از تفاوت زمان‌بندی باشد، نه
+          خودِ حمله یا دفاع.
+          <br><br>
+          <b>دلیل الزام دوره‌ی تخلیه:</b> بدون این بازه، تراکنش‌هایی که درست در لحظه‌ی پایان شبیه‌سازی هنوز معلق‌اند
+          (مثلاً منتظر PUBACK) به‌اشتباه «ناموفق» ثبت می‌شوند، در حالی که فقط دیرتر تکمیل شده‌اند.
+        </div>
+        <pre><code class="language-cpp">const double drainPeriod = simTime - trafficStop;
+
+if (drainPeriod &lt; 9.0)
+{
+    NS_FATAL_ERROR(
+        "Frozen timing methodology requires a post-traffic drain "
+        "period of at least 9 seconds");
+}</code></pre>
+        <div class="cexplain">
+          این بررسی تضمین می‌کند دوره‌ی تخلیه (بعد از پایان ترافیک/حمله) همیشه حداقل ۹ ثانیه باشد تا هر تراکنش
+          معلقی فرصت تکمیل داشته باشد؛ همین یکسان‌سازی زمان‌بندی بین اجراهای clean/attack/defended، پیش‌نیاز
+          مقایسه‌ی علمی و عادلانه‌ی نتایج است.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="s-experiment">
+    <div class="wrap">
+      <span class="kicker">۰۵ / طراحی آزمایش</span>
+      <h2 class="h">زمان‌بندی منجمد و ماتریس ۲۴۰ اجرا</h2>
+      <p class="lede">
+        برای مقایسه‌ی عادلانه‌ی سناریوهای clean/attack/defended، هر اجرا از چهار بازه‌ی زمانی ثابت تشکیل می‌شود،
+        نه بازه‌ای که خودِ شبیه‌سازی تصمیم بگیرد.
+      </p>
+
+      <div class="timeline">
+        <div class="track">
+          <div class="seg init">init</div>
+          <div class="seg traffic">ترافیک قانونی</div>
+          <div class="seg attack">پنجره‌ی حمله</div>
+          <div class="seg drain">drain ≥ ۹s</div>
+        </div>
+        <div class="labels">
+          <span>0s</span><span>1s</span><span>4–8s</span><span>11s</span><span>20s</span>
+        </div>
+      </div>
+
+      <div class="matrix-stat">
+        <span class="eq">۸ ترکیب دفاعی</span><span class="big">×</span>
+        <span class="eq">۳ نوع حمله</span><span class="big">×</span>
+        <span class="eq">۱۰ تکرار</span><span class="big">=</span>
+        <span class="big">۲۴۰ اجرا</span>
+      </div>
+
+      <div class="statgrid">
+        <div class="stat"><div class="label">نرخ مرجع حمله‌ی DoS (λ_ref)</div><div class="value amber">۹۰۰ msg/s</div><div class="sub">با coarse → fine sweep → multi-run کالیبره شد</div></div>
+        <div class="stat"><div class="label">تحویل قانونی زیر DoS + Rate Limiting</div><div class="value teal">۸۸٫۶۵٪</div><div class="sub">legitimate_delivery_ratio</div></div>
+        <div class="stat"><div class="label">صحت اجراها</div><div class="value">۲۴۰ / ۲۴۰</div><div class="sub">همه‌ی پرچم‌های validation = true</div></div>
+      </div>
+
+      <div class="eqbox" style="margin-top:28px;">
+        <div class="row">
+          <span class="badge" style="color:var(--amber-ink);">lost_packets = 0</span>
+          <span style="color:var(--ink-dim); font-size:14px;">تأیید با اجرای واقعی روی ns-3.48، نه فقط ادعای سند</span>
+        </div>
+        <p>
+          خروجی واقعیِ <span class="mono">./ns3 run "mqtt-security-game/main --attack=dos --rateLimiting=true --attackRateHz=100 --rateLimitHz=50"</span>:
+          از ۴۰۰ پیام حمله‌ی ارسالی، ۲۰۰ تا با Rate Limiting رد شدند (<span class="mono">attack_rate_limited=200</span>،
+          <span class="mono">attack_messages_accepted=200</span>)، اما <span class="mono">FlowMonitor</span> سطح IP
+          (منبعی کاملاً مستقل از شمارنده‌های اپلیکیشنی) روی ۱٬۰۱۲ بسته‌ی رصدشده <span class="mono">lost_packets=0</span>
+          گزارش داد. این تأیید می‌کند که رد‌شدن پیام‌های حمله در پایپ‌لاین امنیتی سطح اپلیکیشن رخ می‌دهد نه با
+          دراپ‌کردن بسته در سطح شبکه؛ بروکر همچنان TCP handshake و PUBACK کامل انجام می‌دهد
+          (<span class="mono">mean_delay_ms≈0.41</span>، <span class="mono">mean_jitter_ms≈0.21</span>).
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s-impact">
+    <div class="wrap">
+      <span class="kicker">۰۶ / لایه‌ی دوم</span>
+      <h2 class="h">مدل Impact: از عدد خام تا شدت آسیب</h2>
+      <p class="lede">
+        نسبت تحویل، تأخیر، و نرخ مسدودسازی به‌تنهایی قابل‌مقایسه نیستند. مدل Impact این‌ها را روی یک مقیاس
+        واحد ۰ تا ۱ می‌نشاند و سپس بر مثلث CIA تصویر می‌کند: Replay و Injection روی Integrity، DoS روی Availability؛
+        محرمانگی (Confidentiality) همیشه صفر می‌ماند، چون حمله‌ای به آن شبیه‌سازی نشده.
+      </p>
+
+      <div class="formula">
+<span class="comment">// شدت آسیب DoS، از سه مؤلفه‌ی اندازه‌گیری‌شده</span>
+S_D = w_P · (1 − PDR) + w_F · F_B + w_D · D̂
+
+<span class="comment">// ثابت‌های کالیبره‌شده از داده‌ی ۲۴۰-اجرایی (نه فرضی)</span>
+D0_ms       = 1.014581
+D_hat_no_RL = 0.995008
+D_hat_RL    = 0.588071
+      </div>
+
+      <div class="statgrid">
+        <div class="stat"><div class="label">Integrity ← نگاشت از</div><div class="value" style="font-size:17px">Replay, Injection</div></div>
+        <div class="stat"><div class="label">Availability ← نگاشت از</div><div class="value" style="font-size:17px">DoS</div></div>
+        <div class="stat"><div class="label">Confidentiality</div><div class="value" style="font-size:17px; color:var(--ink-faint)">۰ (خارج از دامنه‌ی پروژه)</div></div>
+      </div>
+
+      <h3 style="font-size:18px; margin:44px 0 18px;">پیاده‌سازی، بر اساس اسکریپت تحلیل</h3>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۱</span>نرمال‌سازی تأخیر</h4><span>stackelberg_extended_analysis.py · normalized_delay</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          <b>پیش‌زمینه:</b> تأخیر خام (میلی‌ثانیه) یک کمیت نامحدود است (نظراً می‌تواند هر عددی باشد)، در حالی که
+          بقیه‌ی معیارهای مدل مثل (۱−PDR) یا F_B ذاتاً بین ۰ و ۱ محدودند. برای این‌که بشود این سه کمیت را با هم در
+          یک فرمول واحد جمع کرد، باید تأخیر هم به همان بازه‌ی [۰،۱] نگاشته شود.
+          <br><br>
+          <b>مفهوم ریاضی:</b> ابتدا افزایش نسبی تأخیر نسبت به خط‌مبنای بدون‌حمله محاسبه می‌شود:
+          δ = max(0, (D−D0)/D0)؛ یعنی δ می‌گوید تأخیر چند برابر حالت عادی بیشتر شده. سپس این مقدار نامحدود از تابع
+          f(δ) = δ/(1+δ) عبور می‌کند. این تابع در δ=۰ مقدار ۰ می‌دهد، با افزایش δ به‌طور یکنوا و پیوسته به ۱ میل
+          می‌کند اما هرگز از آن رد نمی‌شود (چون δ/(1+δ) &lt; 1 برای هر δ متناهی)، و مشتقش همیشه مثبت است، یعنی
+          تأخیر بیشتر همیشه به شدت آسیب بیشتر یا مساوی ترجمه می‌شود، هرگز کمتر.
+          <br><br>
+          <b>دلیل انتخاب همین فرم:</b> نسبت به یک برش خطی ساده مثل min(δ,1)، تابع δ/(1+δ) یک گذار نرم (بدون ناپیوستگی
+          در مشتق) دارد و برای تأخیرهای خیلی بزرگ هم اطلاعات نسبی باقی می‌گذارد، به‌جای اینکه صاف روی سقف ۱ بماند و
+          سناریوهای بد را از خیلی‌بد تشخیص ندهد.
+        </div>
+        <pre><code class="language-python">D0_MS = 1.014581  # baseline mean delay, no attack
+
+def normalized_delay(delay_ms: float) -&gt; float:
+    delta = max(0.0, (delay_ms - D0_MS) / D0_MS)
+    return delta / (1.0 + delta)
+
+D_HAT_NO_RL = normalized_delay(DELAY_NO_RL_MS)  # = 0.995008
+D_HAT_RL    = normalized_delay(DELAY_RL_MS)     # = 0.588071</code></pre>
+        <div class="cexplain">
+          <b>D0_MS</b> و مقادیر تأخیر خام (<b>DELAY_NO_RL_MS</b>, <b>DELAY_RL_MS</b>) مستقیماً از میانگین‌گیری روی
+          ماتریس ۲۴۰-اجرایی به‌دست آمده‌اند؛ یعنی این ثابت‌ها مصرف می‌شوند، نه اینکه در همین اسکریپت تولید شوند.
+        </div>
+      </div>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۲</span>شدت آسیب DoS</h4><span>stackelberg_extended_analysis.py · dos_severity</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          <b>پیش‌زمینه:</b> چرا یک متریک به‌تنهایی کافی نیست؟ اگر فقط از افت نرخ تحویل (PDR) استفاده شود، سناریویی
+          که در آن پیام‌ها دیر می‌رسند ولی نهایتاً همه تحویل داده می‌شوند امتیاز آسیب صفر می‌گیرد، در حالی که تجربه‌ی
+          عملیاتی واقعاً بدتر شده؛ اگر فقط از تأخیر استفاده شود، سناریوی «پیام کاملاً حذف‌شده» دیده نمی‌شود.
+          <br><br>
+          <b>مفهوم ریاضی:</b> S_D یک ترکیب خطی وزن‌دار (weighted linear combination) از سه کمیت مستقل است: (۱−PDR)
+          برای پیام‌های کاملاً ازدست‌رفته، F_B برای نرخ رد‌شدن در پایپ‌لاین forwarding، و D̂ برای تأخیر نرمال‌شده
+          (از کارت قبل). چون هر سه جزء بین ۰ و ۱ محدودند و وزن‌ها جمعشان ۱ می‌شود، این یک ترکیب محدب (convex
+          combination) است، یعنی S_D همیشه در بازه‌ی [۰،۱] می‌ماند و قابل تفسیر به‌عنوان «کسری از حداکثر آسیب ممکن»
+          است.
+          <br><br>
+          <b>دلیل وزن‌دار بودن، نه میانگین ساده:</b> وزن‌ها اجازه می‌دهند اهمیت نسبی هر بعد از آسیب، بسته به اولویت
+          سازمانی، تنظیم شود؛ مثلاً یک کارخانه‌ی حساس به زمان‌واقعی می‌تواند w_D را بالاتر بگذارد. همین انعطاف‌پذیری
+          پایه‌ی تحلیل حساسیت وزن DoS در بخش نتایج است.
+        </div>
+        <pre><code class="language-python">def dos_severity(weights: DosWeights, rate_limited: bool) -&gt; float:
+    if rate_limited:
+        pdr, fb, d_hat = PDR_RL, FB_RL, D_HAT_RL
+    else:
+        pdr, fb, d_hat = PDR_NO_RL, FB_NO_RL, D_HAT_NO_RL
+
+    return (
+        weights.wP * (1.0 - pdr)
+        + weights.wF * fb
+        + weights.wD * d_hat
+    )</code></pre>
+        <div class="cexplain">
+          <b>rate_limited</b> فقط تعیین می‌کند کدام سه‌تایی مقدار خام (PDR/F_B/D̂) استفاده شود؛ وزن‌ها همیشه از
+          بیرون تزریق می‌شوند و در تحلیل حساسیت روی کل سیمپلکس (wP+wF+wD=۱) پیمایش می‌شوند.
+        </div>
+      </div>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۳</span>تصویر بر مثلث CIA</h4><span>stackelberg_extended_analysis.py · cia_projected_impact</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          <b>پیش‌زمینه:</b> مثلث CIA (Confidentiality، Integrity، Availability) یک چارچوب کلاسیک در امنیت اطلاعات
+          است که هر تهدید را روی سه بعد مستقل ارزیابی می‌کند: آیا داده افشا شد (C)، آیا داده دستکاری یا جعل شد (I)،
+          و آیا سرویس در دسترس ماند (A).
+          <br><br>
+          <b>مفهوم ریاضی:</b> این تابع یک نگاشت شرطی (piecewise) است: بسته به نوع حمله، همان عدد Φ خام (از
+          dos_severity برای DoS، یا مقدار باینری ۰/۱ برای Replay و Injection) در وزن بعد مربوطه (w_I یا w_A) ضرب
+          می‌شود. چون هر حمله فقط یک بعد را فعال می‌کند، این عملاً یک تصویر متعامد (orthogonal projection) روی
+          زیرفضای همان بعد است، نه ترکیب هم‌زمان چند بعد.
+          <br><br>
+          <b>دلیل این نگاشت:</b> Replay و Injection هر دو نوعی «جعل یا تکرار داده» هستند، پس مفهوماً یکپارچگی
+          (Integrity) داده را نقض می‌کنند؛ DoS چون سرویس را از دسترس خارج می‌کند، به دسترس‌پذیری (Availability)
+          نگاشت می‌شود. هیچ حمله‌ای در این پروژه محرمانگی را هدف نگرفته (چون هیچ داده‌ای استراق‌سمع یا افشا نشده)،
+          پس w_C هرگز در این فرمول ضرب نمی‌شود؛ این یک محدودیت دامنه‌ی آگاهانه است، نه یک باگ.
+        </div>
+        <pre><code class="language-python">def cia_projected_impact(defense, attack, dos_weights, cia) -&gt; float:
+    """
+    AR, AI -&gt; Integrity
+    AD     -&gt; Availability
+    Confidentiality -&gt; no direct simulated loss in current attack set
+    """
+    phi = base_impact(defense, attack, dos_weights)
+
+    if attack == "A0":
+        return 0.0
+    if attack in ("AR", "AI"):
+        return cia.wI * phi
+    if attack == "AD":
+        return cia.wA * phi</code></pre>
+        <div class="cexplain">
+          بعد Confidentiality در این تابع اصلاً ظاهر نمی‌شود؛ چون هیچ حمله‌ای به محرمانگی شبیه‌سازی نشده، وزن
+          <b>wC</b> در این نگاشت هرگز ضرب نمی‌شود. این یک محدودیت دامنه‌ی صریح و آگاهانه است، نه یک باگ.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="s-game">
+    <div class="wrap">
+      <span class="kicker">۰۷ / لایه‌ی سوم</span>
+      <h2 class="h">بازی Stackelberg: مدافع رهبر، مهاجم پیرو</h2>
+      <p class="lede">
+        مدافع اول ترکیب دفاعی‌اش را متعهد و آشکار می‌کند (مثل یک فایروال که روشن بودنش قابل‌کشف است).
+        مهاجم با دیدن آن، بهترین پاسخ خودش را انتخاب می‌کند. تعادل نقطه‌ای‌ست که مدافع دیگر با تغییر
+        یک‌طرفه‌ی تصمیمش وضعیت بهتری نمی‌گیرد.
+        <span class="mono">U_D = −Φ − C_D(d)</span> ,
+        <span class="mono">U_A = Φ − C_A(a)</span>
+      </p>
+
+      <div class="eqbox">
+        <div class="row">
+          <span class="badge">(d*, a*) = (d_RID, A_D)</span>
+          <span style="color:var(--ink-dim); font-size:14px;">تعادل مرجع در سناریوی هزینه‌ی پایه</span>
+        </div>
+        <p>در هزینه‌های مرجع، مدافع عقلانی هر سه دفاع را هم‌زمان مستقر می‌کند (dRID) و مهاجم عقلانی
+        هم DoS را انتخاب می‌کند (A_D)، نه Replay یا Injection که هر دو با دفاع مربوطه کاملاً خنثی می‌شوند.
+        این نقطه، خودِ سه لایه‌ی پروژه (پروتکل → Impact → بازی) را به یک عدد قابل‌دفاع می‌رساند.</p>
+      </div>
+
+      <h3 style="font-size:18px; margin:44px 0 18px;">پیاده‌سازی، بر اساس اسکریپت حل بازی</h3>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۱</span>مطلوبیت مدافع و مهاجم</h4><span>stackelberg_extended_analysis.py · attacker/defender_utility</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          <b>پیش‌زمینه و مفهوم ریاضی:</b> در نظریه‌ی بازی‌ها، مطلوبیت (Utility) عددی است که هر بازیگر تلاش می‌کند
+          آن را بیشینه کند و بیانگر ارزش خالص یک پیامد برای اوست. اینجا هر دو تابع از یک مقدار مشترک، یعنی Φ
+          (شدت آسیب پیش‌بینی‌شده، محاسبه‌شده در لایه‌ی دوم)، تغذیه می‌شوند، اما با علامت مخالف: مهاجم آسیب را
+          سود خودش می‌بیند (Φ منهای هزینه‌ی حمله)، مدافع همان آسیب را زیان خودش می‌بیند (منفی Φ منهای هزینه‌ی
+          دفاع). این یعنی بخش Φ تقریباً حاصل‌جمع‌صفر است، اما چون هزینه‌ی حمله C_A و هزینه‌ی دفاع C_D مستقل و
+          نامتقارن‌اند، کل بازی حاصل‌جمع‌صفر واقعی نیست.
+          <br><br>
+          <b>دلیل این طراحی:</b> ترکیب خطی (تفریق ساده به‌جای وزن‌دهی غیرخطی یا ضرب) عمداً انتخاب شده تا اثر
+          هر تغییر در هزینه روی نتیجه‌ی نهایی، قابل ردیابی و قابل تفسیر بماند؛ همین سادگی است که تحلیل‌های
+          حساسیت بخش بعدی (تغییر وزن‌ها و آستانه‌ها) را ممکن می‌کند.
+        </div>
+        <pre><code class="language-python">def attacker_utility(defense, attack, costs, dos_weights, cia=None) -&gt; float:
+    phi = cia_projected_impact(defense, attack, dos_weights, cia) \
+          if cia else base_impact(defense, attack, dos_weights)
+    return phi - attack_cost(attack, costs)
+
+def defender_utility(defense, attack, costs, dos_weights, cia=None) -&gt; float:
+    phi = cia_projected_impact(defense, attack, dos_weights, cia) \
+          if cia else base_impact(defense, attack, dos_weights)
+    return -phi - defense_cost(defense, costs)</code></pre>
+        <div class="cexplain">
+          هر دو تابع از همان Φ محاسبه‌شده در لایه‌ی Impact استفاده می‌کنند؛ فقط علامت و جمله‌ی هزینه فرق دارد.
+          این یعنی هر تغییر در مدل Impact، خودکار در نتیجه‌ی بازی هم اثر می‌گذارد، بدون نیاز به هماهنگی دستی.
+        </div>
+      </div>
+
+      <div class="codecard">
+        <div class="chead"><h4><span class="midx">۲</span>حل بازی با قاعده‌ی تساوی‌شکن صریح</h4><span>stackelberg_extended_analysis.py · solve_stackelberg</span></div>
+        <div class="cexplain" style="border-top:none; padding-top:0;">
+          <b>پیش‌زمینه و مفهوم ریاضی:</b> بازی Stackelberg یک بازی رهبر پیرو (Leader Follower) است: رهبر
+          (مدافع) راهبرد خود را اول و به‌صورت متعهدانه اعلام می‌کند، پیرو (مهاجم) آن را می‌بیند و بهترین پاسخ
+          خودش را انتخاب می‌کند. روش استاندارد حل چنین بازی‌ای، استقراء پسرو (Backward Induction) است: برای
+          هر راهبرد ممکن مدافع، اول بهترین پاسخ مهاجم پیدا می‌شود، سپس مدافع از میان این پاسخ‌ها، راهبردی را
+          انتخاب می‌کند که بیشترین مطلوبیت را برایش دارد. مسئله‌ی تساوی وقتی رخ می‌دهد که argmax مطلوبیت مهاجم
+          یک مجموعه‌ی چندعضوی باشد، نه یک پاسخ یکتا؛ در این حالت رفتار مهاجم از دید مدافع قابل‌مشاهده نیست و دو
+          قرارداد استاندارد در ادبیات بازی‌های امنیتی وجود دارد: تعادل قوی Stackelberg (SSE)، که خوش‌بینانه است
+          و فرض می‌کند مهاجم در صورت تساوی، گزینه‌ای را انتخاب می‌کند که برای مدافع بهتر است، و تعادل ضعیف
+          Stackelberg (WSE)، که بدبینانه است و بدترین حالت را برای مدافع در نظر می‌گیرد.
+          <br><br>
+          <b>دلیل محاسبه‌ی هر دو قرارداد:</b> چون این فرض رفتاری قابل‌مشاهده یا قابل‌اثبات نیست، محاسبه‌ی
+          هر دو تعادل (SSE و WSE) نشان می‌دهد نتیجه‌ی نهایی چقدر به این فرض حساس است؛ همین مقایسه، پایه‌ی
+          مستقیم تحلیل «استحکام تساوی‌شکن» در بخش بعد است.
+        </div>
+        <pre><code class="language-python">for d in feasible_defenses:
+    au = {a: attacker_utility(d, a, costs, dos_weights, cia) for a in ATTACKS}
+    br, _ = argmax_ties(au)              # attacker's best-response set
+    attacker_br_sets[d] = br
+
+    du = {a: defender_utility(d, a, costs, dos_weights, cia) for a in br}
+
+    if tie_break == "strong":
+        a_star = max(br, key=lambda a: (du[a], a))
+    elif tie_break == "weak":
+        a_star = min(br, key=lambda a: (du[a], a))
+
+    chosen_attack[d] = a_star
+    leader_values[d] = du[a_star]
+
+d_star, value = argmax_ties(leader_values)   # leader's best defense(s)</code></pre>
+        <div class="cexplain">
+          تساوی در بهترین‌پاسخ پیرو یک اتفاق واقعی در این بازی است، نه یک حالت لبه‌ای نادر؛ به همین دلیل کد آن را
+          صریح مدیریت می‌کند، به‌جای انتخاب خاموش یکی از گزینه‌های مساوی. همین انتخاب صریح است که در بخش بعد،
+          پایه‌ی تحلیل «استحکام تصمیم» می‌شود.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="s-sensitivity">
+    <div class="wrap">
+      <span class="kicker">۰۸ / استحکام نتیجه</span>
+      <h2 class="h">هفت تحلیل حساسیت و مرزهای پایداری نتیجه</h2>
+      <p class="lede">
+        چون هزینه‌ی دقیق هیچ دفاع یا حمله‌ای با قطعیت معلوم نیست، پروژه ده‌ها تا صدها ترکیب هزینه/وزن را
+        امتحان می‌کند. مهم‌ترین سؤال: نتیجه چقدر به یک فرض نظری غیرقابل‌مشاهده، یعنی قاعده‌ی تساوی‌شکنِ
+        Strong/Weak Stackelberg، حساس است؟
+      </p>
+
+      <div class="sens">
+        <div class="row"><span class="name">حساسیت وزن DoS</span><div class="barbg"><div class="barfg" style="width:0%"></div></div><span class="pct">۰٫۰٪</span></div>
+        <div class="row"><span class="name">کف امنیتی</span><div class="barbg"><div class="barfg" style="width:0%"></div></div><span class="pct">۰٫۰٪</span></div>
+        <div class="row"><span class="name">تحلیل تطبیقی</span><div class="barbg"><div class="barfg" style="width:0%"></div></div><span class="pct">۰٫۰٪</span></div>
+        <div class="row"><span class="name">حساسیت وزن CIA</span><div class="barbg"><div class="barfg" style="width:24.2%"></div></div><span class="pct">۲۴٫۲٪</span></div>
+        <div class="row"><span class="name">محدودیت بودجه</span><div class="barbg"><div class="barfg" style="width:39.2%"></div></div><span class="pct">۳۹٫۲٪</span></div>
+      </div>
+      <p style="margin-top:18px; font-size:13.5px; color:var(--ink-faint); max-width:64ch;">
+        سهم ردیف‌هایی که با تغییر قاعده‌ی تساوی‌شکن، تعادل تغییر می‌کند. برای دفاع کامل DoS، حساسیت وزن DoS،
+        کف امنیتی، و تحلیل تطبیقی کاملاً پایدارند (۰٪). نزدیکِ آستانه‌های بودجه، نتیجه به این فرض نظری وابسته می‌شود.
+      </p>
+
+      <div class="statgrid" style="margin-top:32px;">
+        <div class="stat"><div class="label">دفاع کامل تحت وزن‌دهی DoS</div><div class="value teal">۲۳۱ / ۲۳۱</div><div class="sub">ثابت در تمام ترکیب وزن‌ها</div></div>
+        <div class="stat"><div class="label">جهش تعادل بودجه</div><div class="value">۰٫۱۰ → ۰٫۲۰ → ۰٫۳۰</div><div class="sub">d0 → dRI:AD → dRID:AD</div></div>
+        <div class="stat"><div class="label">جهش تحلیل تطبیقی (c_λ)</div><div class="value amber">≈ ۰٫۲۰</div><div class="sub">dRID:AD ↔ dRID:A0</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="s-limits">
+    <div class="wrap">
+      <span class="kicker">۰۹ / محدودیت‌ها</span>
+      <h2 class="h">نقاط ضعف واقعی و مرزهای دامنه‌ی پروژه</h2>
+      <p class="lede">این محدودیت‌ها آگاهانه و از ابتدای طراحی پروژه شناخته‌شده بوده‌اند؛ هرکدام دلیل مشخصی دارد و مسیر رفعش در کار آینده مشخص است.</p>
+
+      <div class="limlist">
+        <div class="lim"><span class="mark">·</span><p>پیاده‌سازی MQTT متمرکز بر wire-format است، نه یک بروکر تولیدی کامل (بدون session persistence، retained messages، wildcard).</p></div>
+        <div class="lim"><span class="mark">·</span><p>مدل Auth/ACL یک فلگ باینری است، نه سازوکار رمزنگاری‌شده‌ی واقعی؛ فضای دفاع نیز گسسته/باینری است.</p></div>
+        <div class="lim"><span class="mark">·</span><p>توپولوژی و بار کاری تک‌حالته (یک ناشر، یک مشترک، یک لینک CSMA)، بدون بررسی حساسیت به مقیاس شبکه.</p></div>
+        <div class="lim"><span class="mark">·</span><p>rate limiting از نوع fixed-window است، نه sliding-window؛ در مرز دو پنجره از نظر تئوری burst لحظه‌ای ممکن است.</p></div>
+        <div class="lim"><span class="mark">·</span><p>هزینه‌های بازی نرمال‌شده‌اند و لنگری به دنیای واقعی (دلاری/عملیاتی) ندارند؛ گزارش آماری بر پایه‌ی ۱۰ تکرار در هر سلول است.</p></div>
+        <div class="lim"><span class="mark">·</span><p>تحلیل «Adaptive» یک comparative statics تک‌بعدی است (فقط c_λ)، نه یادگیری تطبیقی واقعی مهاجم.</p></div>
+        <div class="lim"><span class="mark">·</span><p>تعادل در بخش‌هایی (به‌ویژه بودجه) به قاعده‌ی تساوی‌شکن Strong/Weak حساس است؛ این یک فرض رفتاری است، نه واقعیت مشاهده‌شده.</p></div>
+        <div class="lim"><span class="mark">·</span><p>بدون اعتبارسنجی مقابل یک broker واقعی (Mosquitto/HiveMQ) یا داده‌ی میدانی؛ بدون شبیه‌سازی حمله به محرمانگی.</p></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="thanks">
+  <div class="big">با تشکر از توجه شما 🙏</div>
+  <p class="sub">امنیت MQTT در IIoT با مدل بازی Stackelberg</p>
+  <div class="rule"></div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>امنیت MQTT در IIoT با مدل بازی Stackelberg</span>
+    <span class="mono">ns-3 · MQTT 3.1.1 · QoS 1 · Stackelberg Security Game</span>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+(function(){
+  if (window.hljs){
+    document.querySelectorAll('.codecard pre code').forEach(function(block){
+      hljs.highlightElement(block);
+    });
+  }
+})();
+</script>
+<script>
+(function(){
+  // scroll progress + chapter marks
+  var sections = Array.from(document.querySelectorAll('main section'));
+  var railFill = document.getElementById('rail-fill');
+  var marks = document.getElementById('chaptermarks');
+
+  sections.forEach(function(s){
+    var a = document.createElement('a');
+    a.href = '#' + s.id;
+    var label = s.querySelector('.kicker');
+    var span = document.createElement('span');
+    span.textContent = label ? label.textContent : s.id;
+    a.appendChild(span);
+    marks.appendChild(a);
+  });
+  var markLinks = Array.from(marks.querySelectorAll('a'));
+
+  function onScroll(){
+    var doc = document.documentElement;
+    var scrolled = doc.scrollTop;
+    var height = doc.scrollHeight - doc.clientHeight;
+    railFill.style.width = (height > 0 ? (scrolled/height*100) : 0) + '%';
+
+    var mid = scrolled + window.innerHeight * 0.4;
+    var activeIdx = 0;
+    sections.forEach(function(s, i){
+      if (s.offsetTop <= mid) activeIdx = i;
+    });
+    markLinks.forEach(function(a, i){ a.classList.toggle('active', i === activeIdx); });
+  }
+  document.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+
+  // ambient network canvas in hero
+  try{
+    var canvas = document.getElementById('netcanvas');
+    var ctx = canvas.getContext('2d');
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function resize(){
+      var rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    function getVar(name){
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    var nodes = [];
+    var W, H;
+    function seed(){
+      var rect = canvas.getBoundingClientRect();
+      W = rect.width; H = rect.height;
+      nodes = [];
+      var count = W < 640 ? 14 : 26;
+      for (var i=0;i<count;i++){
+        nodes.push({
+          x: Math.random()*W, y: Math.random()*H,
+          vx: (Math.random()-0.5)*0.18, vy: (Math.random()-0.5)*0.18,
+          r: Math.random()*1.6 + 1
+        });
+      }
+    }
+    seed();
+    window.addEventListener('resize', seed);
+
+    var packets = [];
+    function spawnPacket(){
+      if (nodes.length < 2) return;
+      var a = nodes[Math.floor(Math.random()*nodes.length)];
+      var b = nodes[Math.floor(Math.random()*nodes.length)];
+      if (a===b) return;
+      var dx=a.x-b.x, dy=a.y-b.y;
+      if (Math.sqrt(dx*dx+dy*dy) > 260) return;
+      packets.push({a:a,b:b,t:0, attack: Math.random() < 0.28});
+    }
+
+    var lineCol, teal, amber;
+    function refreshColors(){
+      lineCol = getVar('--line-strong') || 'rgba(0,0,0,0.1)';
+      teal = getVar('--teal') || '#0f7d6f';
+      amber = getVar('--amber') || '#b9611c';
+    }
+    refreshColors();
+
+    var last = 0;
+    function frame(ts){
+      if (reduceMotion){ draw(); return; }
+      if (!last) last = ts;
+      var dt = Math.min(ts-last, 40); last = ts;
+
+      nodes.forEach(function(n){
+        n.x += n.vx*dt*0.06; n.y += n.vy*dt*0.06;
+        if (n.x<0||n.x>W) n.vx*=-1;
+        if (n.y<0||n.y>H) n.vy*=-1;
+      });
+
+      if (Math.random() < 0.045) spawnPacket();
+      packets.forEach(function(p){ p.t += dt*0.0009; });
+      packets = packets.filter(function(p){ return p.t < 1; });
+
+      draw();
+      requestAnimationFrame(frame);
+    }
+
+    function draw(){
+      ctx.clearRect(0,0,W,H);
+      // links
+      ctx.lineWidth = 1;
+      for (var i=0;i<nodes.length;i++){
+        for (var j=i+1;j<nodes.length;j++){
+          var a=nodes[i], b=nodes[j];
+          var dx=a.x-b.x, dy=a.y-b.y;
+          var dist = Math.sqrt(dx*dx+dy*dy);
+          if (dist < 170){
+            ctx.strokeStyle = lineCol;
+            ctx.globalAlpha = (1 - dist/170) * 0.5;
+            ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+      // nodes
+      nodes.forEach(function(n){
+        ctx.fillStyle = lineCol;
+        ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fill();
+      });
+      // packets
+      packets.forEach(function(p){
+        var x = p.a.x + (p.b.x-p.a.x)*p.t;
+        var y = p.a.y + (p.b.y-p.a.y)*p.t;
+        ctx.fillStyle = p.attack ? amber : teal;
+        ctx.globalAlpha = 1 - Math.abs(p.t-0.5)*0.3;
+        ctx.beginPath(); ctx.arc(x,y,2.6,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    if (reduceMotion){ draw(); } else { requestAnimationFrame(frame); }
+
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    mq.addEventListener && mq.addEventListener('change', refreshColors);
+  }catch(e){}
+})();
+</script>
+
+<script>
+(function(){
+  // ---------- interactive attack pipeline demo ----------
+  var SCENARIOS = {
+    legit: {
+      label: 'ترافیک قانونی', cls: 'legit',
+      steps: [ {stop:1,result:'pass'}, {stop:2,result:'pass'}, {stop:3,result:'pass'} ],
+      final: 'good',
+      outcome: '<b>تحویل موفق.</b> پیام از هر سه فیلتر عبور کرد و به مشترک رسید؛ این رفتار مورد انتظار برای ترافیک عادی است.',
+    },
+    replay: {
+      label: 'بازپخش (Replay)', cls: 'attack',
+      steps: [ {stop:1,result:'pass'}, {stop:2,result:'fail'} ],
+      final: 'bad',
+      outcome: '<b>مسدود در فیلتر ۲ (Freshness).</b> اتصال مهاجم از احراز هویت عبور می‌کند، اما شماره‌ی توالی تکراری در فیلتر بعدی لو می‌رود.',
+    },
+    injection: {
+      label: 'تزریق پیام (Injection)', cls: 'attack',
+      steps: [ {stop:1,result:'fail'} ],
+      final: 'bad',
+      outcome: '<b>مسدود در فیلتر ۱ (Auth/ACL).</b> هویت این اتصال در همان لحظه‌ی پذیرش TCP «غیرمجاز» ثبت شده؛ حتی محتوای معتبر هم آن را نجات نمی‌دهد.',
+    },
+    dos: {
+      label: 'منع سرویس (DoS)', cls: 'attack',
+      steps: [ {stop:1,result:'pass'}, {stop:2,result:'pass'}, {stop:3,result:'fail'} ],
+      final: 'bad',
+      outcome: '<b>مسدود در فیلتر ۳ (Rate Limiting).</b> پیام مازاد بر سقف رد می‌شود؛ پیام‌های داخل سقف مجاز عبور می‌کنند؛ به همین دلیل تحویل ترافیک قانونی زیر DoS همچنان بالا می‌ماند.',
+    },
+  };
+
+  var railEl = document.getElementById('rail-demo');
+  var packetEl = document.getElementById('packet-demo');
+  var fillEl = document.getElementById('rail-fill-demo');
+  if (!railEl || !packetEl || !fillEl) return;
+  var railLine = railEl.querySelector('.rail-line');
+  var outcomeEl = document.getElementById('outcome');
+  var pubackLight = document.getElementById('puback-light');
+  var pubackText = document.getElementById('puback-text');
+  var tabsEl = document.getElementById('scenario-tabs');
+  var replayBtn = document.getElementById('replay-btn');
+  var floodStatsEl = document.getElementById('flood-stats');
+  var fsSent = document.getElementById('fs-sent');
+  var fsPassed = document.getElementById('fs-passed');
+  var fsBlocked = document.getElementById('fs-blocked');
+  var simControlsEl = document.getElementById('sim-controls');
+  var intensitySlider = document.getElementById('intensity-slider');
+  var intensityVal = document.getElementById('intensity-val');
+
+  var currentScenario = null, animTimer = null, floodTimers = [];
+  var floodIntensity = parseInt(intensitySlider.value, 10);
+
+  function toFa(n){
+    var fa = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+    return String(n).split('').map(function(ch){ return /[0-9]/.test(ch) ? fa[+ch] : ch; }).join('');
+  }
+
+  intensitySlider.addEventListener('input', function(){
+    floodIntensity = parseInt(intensitySlider.value, 10);
+    intensityVal.textContent = toFa(floodIntensity) + ' پیام';
+  });
+
+  var netNodes = {
+    publisher: document.getElementById('net-publisher'),
+    attacker: document.getElementById('net-attacker'),
+    broker: document.getElementById('net-broker'),
+    subscriber: document.getElementById('net-subscriber'),
+  };
+  function resetNetMap(){ Object.keys(netNodes).forEach(function(k){ netNodes[k].classList.remove('on','attacking','received'); }); }
+  function setNetSource(key){ resetNetMap(); if (key === 'legit') netNodes.publisher.classList.add('on'); else netNodes.attacker.classList.add('attacking'); }
+
+  var sessionRuns=0, sessionSent=0, sessionAccepted=0, sessionBlocked=0;
+  var ssRunsEl=document.getElementById('ss-runs'), ssSentEl=document.getElementById('ss-sent'),
+      ssAcceptedEl=document.getElementById('ss-accepted'), ssBlockedEl=document.getElementById('ss-blocked');
+  function renderSessionStats(){
+    ssRunsEl.textContent=toFa(sessionRuns); ssSentEl.textContent=toFa(sessionSent);
+    ssAcceptedEl.textContent=toFa(sessionAccepted); ssBlockedEl.textContent=toFa(sessionBlocked);
+  }
+  function bumpSessionStats(sent,accepted,blocked){
+    sessionRuns+=1; sessionSent+=sent; sessionAccepted+=accepted; sessionBlocked+=blocked; renderSessionStats();
+  }
+  document.getElementById('ss-reset-btn').addEventListener('click', function(){
+    sessionRuns=0; sessionSent=0; sessionAccepted=0; sessionBlocked=0; renderSessionStats();
+  });
+
+  function renderTabs(){
+    tabsEl.innerHTML = Object.keys(SCENARIOS).map(function(key){
+      var s = SCENARIOS[key];
+      return '<button data-key="'+key+'" class="'+s.cls+'"><span class="dot"></span>'+s.label+'</button>';
+    }).join('');
+    tabsEl.querySelectorAll('button').forEach(function(btn){
+      btn.addEventListener('click', function(){ runScenario(btn.dataset.key); });
+    });
+  }
+  renderTabs();
+
+  function resetRail(){
+    for (var i=0;i<=4;i++){ document.getElementById('stop-'+i).className='box'; }
+    packetEl.className='packet'; packetEl.style.right='40px'; packetEl.style.display='';
+    fillEl.style.width='0%';
+    railLine.classList.remove('blocked','mixed');
+    floodStatsEl.style.display='none';
+    pubackLight.classList.remove('on');
+    pubackText.textContent='در انتظار...';
+    outcomeEl.className='outcome-banner';
+    outcomeEl.innerHTML='روی یکی از سناریوها بزنید تا پویانمایی شروع شود.';
+    resetNetMap();
+  }
+
+  function railPercentForStop(stopIndex){
+    var railWidth = railEl.getBoundingClientRect().width;
+    var usable = railWidth - 80;
+    return 40 + usable * (stopIndex/4);
+  }
+
+  function runScenario(key){
+    clearTimeout(animTimer);
+    floodTimers.forEach(function(t){ clearTimeout(t); }); floodTimers=[];
+    railEl.querySelectorAll('.packet.flood-clone').forEach(function(el){ el.remove(); });
+    floodStatsEl.style.display='none';
+    simControlsEl.classList.toggle('show', key==='dos');
+
+    if (key==='dos'){ runFloodScenario(SCENARIOS.dos); return; }
+
+    var s = SCENARIOS[key];
+    currentScenario = key;
+    resetRail();
+    tabsEl.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.key===key); });
+    setNetSource(key);
+    document.getElementById('stop-0').classList.add('pass');
+
+    var delay = 300, stepDelay = 900;
+    setTimeout(function(){ pubackLight.classList.add('on'); pubackText.textContent='PUBACK صادر شد ✓ (سطح پروتکل)'; }, 250);
+
+    s.steps.forEach(function(step){
+      delay += stepDelay;
+      animTimer = setTimeout(function(){
+        var px = railPercentForStop(step.stop);
+        packetEl.style.right = px+'px';
+        var railWidth = railEl.getBoundingClientRect().width, usable = railWidth-80;
+        fillEl.style.width = ((px-40)/usable*100)+'%';
+        var box = document.getElementById('stop-'+step.stop);
+        box.classList.add('active');
+        netNodes.broker.classList.add('on');
+        setTimeout(function(){
+          if (step.result==='pass'){
+            box.classList.remove('active'); box.classList.add('pass'); packetEl.classList.add('good');
+          } else {
+            box.classList.remove('active'); box.classList.add('fail'); packetEl.classList.add('danger');
+            railLine.classList.add('blocked');
+            setTimeout(function(){ packetEl.classList.add('hide'); }, 500);
+            outcomeEl.className='outcome-banner bad'; outcomeEl.innerHTML=s.outcome;
+            netNodes.broker.classList.remove('on');
+            bumpSessionStats(1,0,1);
+          }
+        }, 380);
+      }, delay);
+    });
+
+    if (s.final==='good'){
+      delay += stepDelay;
+      animTimer = setTimeout(function(){
+        fillEl.style.width='100%';
+        setTimeout(function(){
+          document.getElementById('stop-4').classList.add('pass');
+          outcomeEl.className='outcome-banner good'; outcomeEl.innerHTML=s.outcome;
+          netNodes.broker.classList.remove('on'); netNodes.subscriber.classList.add('received');
+          bumpSessionStats(1,1,0);
+        }, 380);
+      }, delay);
+    }
+  }
+
+  function runFloodScenario(s){
+    resetRail();
+    packetEl.style.display='none';
+    currentScenario='dos';
+    tabsEl.querySelectorAll('button').forEach(function(b){ b.classList.toggle('active', b.dataset.key==='dos'); });
+    netNodes.attacker.classList.add('attacking');
+    document.getElementById('stop-0').classList.add('pass');
+    floodStatsEl.style.display='flex';
+    fsSent.textContent='0'; fsPassed.textContent='0'; fsBlocked.textContent='0';
+
+    setTimeout(function(){ pubackLight.classList.add('on'); pubackText.textContent='PUBACK صادر شد ✓ (سطح پروتکل، برای هر پیام)'; }, 250);
+
+    var N = floodIntensity;
+    var numPass = Math.max(1, Math.round(N*0.056));
+    var PASS_INDEXES = numPass===1 ? [Math.floor(N/2)] :
+      Array.from({length:numPass}, function(_,k){ return Math.floor((k+1)*N/(numPass+1)); });
+    var sent=0, passed=0, blocked=0, anyPassed=false;
+
+    for (var i=0;i<N;i++){
+      (function(i){
+        var startDelay = 250 + i*170;
+        var willPass = PASS_INDEXES.indexOf(i) !== -1;
+        var t0 = setTimeout(function(){
+          sent++; fsSent.textContent=sent;
+          var clone = document.createElement('div');
+          clone.className='packet flood-clone';
+          clone.textContent='✉';
+          clone.style.right='40px';
+          clone.style.transform='translateY('+((i%3-1)*14)+'px)';
+          railEl.appendChild(clone);
+          var railWidth = railEl.getBoundingClientRect().width, usable = railWidth-80;
+          function moveTo(stopIdx){ return 40 + usable*(stopIdx/4); }
+          requestAnimationFrame(function(){ clone.style.right = moveTo(1)+'px'; });
+          var boxes = [1,2,3].map(function(n){ return document.getElementById('stop-'+n); });
+          netNodes.broker.classList.add('on');
+          var t1 = setTimeout(function(){ boxes[0].classList.add('active'); setTimeout(function(){ boxes[0].classList.remove('active'); },260); clone.style.right=moveTo(2)+'px'; }, 260);
+          var t2 = setTimeout(function(){ boxes[1].classList.add('active'); setTimeout(function(){ boxes[1].classList.remove('active'); },260); clone.style.right=moveTo(3)+'px'; }, 520);
+          var t3 = setTimeout(function(){
+            boxes[2].classList.add('active'); setTimeout(function(){ boxes[2].classList.remove('active'); },260);
+            if (willPass){
+              clone.classList.add('good'); clone.style.right=moveTo(4)+'px';
+              var t4 = setTimeout(function(){ passed++; anyPassed=true; fsPassed.textContent=passed; clone.classList.add('hide'); setTimeout(function(){ clone.remove(); },400); }, 560);
+              floodTimers.push(t4);
+            } else {
+              clone.classList.add('danger');
+              var t4b = setTimeout(function(){ blocked++; fsBlocked.textContent=blocked; clone.classList.add('hide'); setTimeout(function(){ clone.remove(); },400); }, 200);
+              floodTimers.push(t4b);
+            }
+          }, 780);
+          floodTimers.push(t1,t2,t3);
+        }, startDelay);
+        floodTimers.push(t0);
+      })(i);
+    }
+
+    var totalTime = 250 + N*170 + 780 + 600 + 300;
+    var tFinal = setTimeout(function(){
+      document.getElementById('stop-1').classList.add('pass');
+      document.getElementById('stop-2').classList.add('pass');
+      document.getElementById('stop-3').classList.add('mixed');
+      railLine.classList.add('mixed');
+      fillEl.style.width = anyPassed ? '100%' : '75%';
+      if (anyPassed) document.getElementById('stop-4').classList.add('pass');
+      outcomeEl.className='outcome-banner bad'; outcomeEl.innerHTML=s.outcome;
+      netNodes.broker.classList.remove('on');
+      if (anyPassed) netNodes.subscriber.classList.add('received');
+      bumpSessionStats(sent,passed,blocked);
+    }, totalTime);
+    floodTimers.push(tFinal);
+  }
+
+  replayBtn.addEventListener('click', function(){ if (currentScenario) runScenario(currentScenario); });
+
+  var demoSection = document.getElementById('demo');
+  var demoIo = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if (e.isIntersecting){ runScenario('legit'); demoIo.disconnect(); } });
+  }, {threshold:0.4});
+  demoIo.observe(demoSection);
+
+  window.addEventListener('resize', function(){ if (currentScenario) runScenario(currentScenario); });
+})();
+</script>

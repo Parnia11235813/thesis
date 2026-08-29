@@ -1,0 +1,6 @@
+analysis,rows,tie_break_changed_rows,tie_break_changed_fraction
+dos_weight_sensitivity.csv,231,0,0.0
+cia_weight_sensitivity.csv,231,56,0.24242424242424243
+security_floor_analysis.csv,21,0,0.0
+budget_analysis.csv,51,20,0.39215686274509803
+adaptive_repeated_analysis.csv,31,0,0.0
